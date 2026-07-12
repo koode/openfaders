@@ -15,14 +15,8 @@ struct OnboardingView: View {
                 VStack(alignment: .leading, spacing: 18) {
                     driverStep
                     micStep
-                    infoStep(
-                        number: 3,
-                        title: "Set the RODECaster to Multitrack mode",
-                        detail: "On the board: Settings ▸ Outputs ▸ Multitrack ▸ USB 1 Input ▸ Expanded. That exposes the ten-channel return OpenFaders routes into. No software can toggle it for you.")
-                    infoStep(
-                        number: 4,
-                        title: "Send an app to a fader",
-                        detail: "Choose an OpenFaders device (System, Game, Music, Virtual A or B) as an app's output, then bring the matching source up on a fader. Only System is monitored by default.")
+                    multitrackStep
+                    audioStep
                 }
                 .padding(20)
             }
@@ -142,11 +136,31 @@ struct OnboardingView: View {
         .padding(16)
     }
 
-    private func infoStep(number: Int, title: String, detail: String) -> some View {
-        stepCard(number: number, title: title) {
-            Text(detail)
+    private var multitrackStep: some View {
+        stepCard(number: 3, title: "Set the RODECaster to Multitrack mode") {
+            if model.multitrackDetected {
+                Label("Multitrack mode detected (10-channel output)", systemImage: "checkmark.circle.fill")
+                    .foregroundStyle(.green)
+            } else {
+                Text("On the board: Settings ▸ Outputs ▸ Multitrack ▸ USB 1 Input ▸ Expanded. That exposes the ten-channel return OpenFaders routes into, and OpenFaders detects it automatically. No software can toggle it for you.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private var audioStep: some View {
+        stepCard(number: 4, title: "Send an app to a fader") {
+            Text("Choose an OpenFaders device (System, Game, Music, Virtual A or B) as an app's output, then bring the matching source up on a fader. Only System is monitored by default.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
+            if model.audioDetected {
+                Label("Audio detected — it's working", systemImage: "checkmark.circle.fill")
+                    .foregroundStyle(.green)
+            } else {
+                Label("Waiting for audio through an OpenFaders device…", systemImage: "waveform")
+                    .foregroundStyle(.secondary)
+            }
         }
     }
 

@@ -15,6 +15,7 @@
 
 #include <AudioToolbox/AudioToolbox.h>
 #include <CoreAudio/CoreAudio.h>
+#include <math.h>
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -55,6 +56,11 @@ typedef struct {
     // Control-loop state, touched only by the control thread.
     double controlIntegral;
     double currentRateScalar;
+
+    // Signal metering. Peak magnitude captured since the reader last took it,
+    // updated in the input callback only while metering is enabled.
+    _Atomic float peakLevel;
+    OpenFadersEngine *owner;
 } EngineRoute;
 
 struct OpenFadersEngine {
@@ -70,6 +76,9 @@ struct OpenFadersEngine {
     _Atomic bool controlRunning;
     bool controlThreadStarted;
     pthread_t controlThread;
+
+    // When set, the input callbacks track peak signal level (see the metering API).
+    _Atomic bool meteringEnabled;
 };
 
 #pragma mark - Core Audio discovery helpers
@@ -290,6 +299,22 @@ static OSStatus InputRenderCallback(void *inRefCon, AudioUnitRenderActionFlags *
                                       frameCount, &captureList);
     if (status == noErr) {
         EngineRingWrite(&route->ring, captureScratch, frameCount);
+
+        if (atomic_load_explicit(&route->owner->meteringEnabled, memory_order_relaxed)) {
+            float peak = 0.0f;
+            for (uint32_t sampleIndex = 0; sampleIndex < frameCount * kEngineChannels; ++sampleIndex) {
+                float magnitude = fabsf(captureScratch[sampleIndex]);
+                if (magnitude > peak) {
+                    peak = magnitude;
+                }
+            }
+            // Hold the loudest peak seen since the reader last took it, so a poll a
+            // second later still catches a brief sound.
+            float previous = atomic_load_explicit(&route->peakLevel, memory_order_relaxed);
+            if (peak > previous) {
+                atomic_store_explicit(&route->peakLevel, peak, memory_order_relaxed);
+            }
+        }
     }
     return noErr;
 }
@@ -630,6 +655,8 @@ bool OpenFadersEngineStart(OpenFadersEngine *engine, const OpenFadersEngineConfi
         route->virtualDeviceID = virtualDeviceID;
         route->outputChannelPairStart = config->routes[index].outputChannelPairStart;
         route->inputUnit = NULL;
+        route->owner = engine;
+        atomic_store_explicit(&route->peakLevel, 0.0f, memory_order_relaxed);
         EngineRingReset(&route->ring);
         PinNominalSampleRate(virtualDeviceID);
 
@@ -703,4 +730,26 @@ void OpenFadersEngineGetStatus(OpenFadersEngine *engine, OpenFadersEngineStatus 
         outStatus->underrunFrames +=
             atomic_load_explicit(&engine->routes[index].ring.underrunFrames, memory_order_relaxed);
     }
+}
+
+void OpenFadersEngineSetMetering(OpenFadersEngine *engine, bool enabled) {
+    if (engine == NULL) {
+        return;
+    }
+    atomic_store_explicit(&engine->meteringEnabled, enabled, memory_order_relaxed);
+}
+
+float OpenFadersEngineTakeSignalPeak(OpenFadersEngine *engine) {
+    if (engine == NULL) {
+        return 0.0f;
+    }
+    float peak = 0.0f;
+    for (uint32_t index = 0; index < engine->routeCount; ++index) {
+        float routePeak =
+            atomic_exchange_explicit(&engine->routes[index].peakLevel, 0.0f, memory_order_relaxed);
+        if (routePeak > peak) {
+            peak = routePeak;
+        }
+    }
+    return peak;
 }

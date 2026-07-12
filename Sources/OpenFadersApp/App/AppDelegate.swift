@@ -13,7 +13,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
 // Owns the single onboarding window.
 @MainActor
-final class OnboardingPresenter {
+final class OnboardingPresenter: NSObject, NSWindowDelegate {
     static let shared = OnboardingPresenter()
 
     private var windowController: NSWindowController?
@@ -31,6 +31,10 @@ final class OnboardingPresenter {
         windowController?.close()
     }
 
+    func windowWillClose(_ notification: Notification) {
+        AppModel.shared.onboardingDidClose()
+    }
+
     private func makeWindowController() -> NSWindowController {
         let hostingController = NSHostingController(
             rootView: OnboardingView().environment(AppModel.shared))
@@ -38,6 +42,7 @@ final class OnboardingPresenter {
         window.title = "Welcome to OpenFaders"
         window.styleMask = [.titled, .closable]
         window.isReleasedWhenClosed = false
+        window.delegate = self
         window.center()
         return NSWindowController(window: window)
     }

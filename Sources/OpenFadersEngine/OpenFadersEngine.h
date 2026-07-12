@@ -129,6 +129,14 @@ void OpenFadersEngineDestroy(OpenFadersEngine *engine);
 // audio is running.
 void OpenFadersEngineGetStatus(OpenFadersEngine *engine, OpenFadersEngineStatus *outStatus);
 
+// Signal metering, used to confirm audio is actually flowing (e.g. while the
+// onboarding window is open). It is off by default and adds a small per-buffer cost
+// only while enabled. OpenFadersEngineTakeSignalPeak returns the loudest sample
+// magnitude (0..1) captured across all routes since the previous call and resets the
+// running peak, so polling it a second apart still catches a brief sound.
+void OpenFadersEngineSetMetering(OpenFadersEngine *engine, bool enabled);
+float OpenFadersEngineTakeSignalPeak(OpenFadersEngine *engine);
+
 #ifdef __cplusplus
 }
 #endif

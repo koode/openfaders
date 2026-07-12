@@ -49,11 +49,15 @@ final class AppModel {
     private(set) var lastStartError: String?
     private(set) var lastInstallError: String?
     private(set) var micState: MicrophonePermission.State = MicrophonePermission.state
+    private(set) var multitrackDetected = false
+    private(set) var audioDetected = false
 
     @ObservationIgnored private let coordinator = EngineCoordinator()
     @ObservationIgnored private var pollingTask: Task<Void, Never>?
     @ObservationIgnored private var lastOutputDeviceID: UInt32 = 0
     @ObservationIgnored private var lastMicState: MicrophonePermission.State = MicrophonePermission.state
+    @ObservationIgnored private var onboardingOpen = false
+    @ObservationIgnored private let signalThreshold: Float = 0.003 // ~ -50 dBFS
 
     private init() {
         configuration = ConfigurationStore.loadConfiguration()
@@ -146,7 +150,17 @@ final class AppModel {
 
     func presentOnboarding() {
         ConfigurationStore.saveHasSeenOnboarding(true)
+        onboardingOpen = true
+        audioDetected = false
+        multitrackDetected = availableOutputDevices().contains { $0.looksLikeMultitrackBoard }
+        coordinator.setMetering(true) // meter the captured signal only while onboarding is open
         OnboardingPresenter.shared.show()
+    }
+
+    // Called when the onboarding window closes. Stops the signal metering.
+    func onboardingDidClose() {
+        onboardingOpen = false
+        coordinator.setMetering(false)
     }
 
     // Shows onboarding on first launch, and thereafter whenever the driver or
@@ -166,6 +180,17 @@ final class AppModel {
 
     func refreshMicState() {
         micState = MicrophonePermission.state
+    }
+
+    // While onboarding is visible, surface whether the board is in Multitrack mode
+    // (its ten-channel device is present) and whether audio is actually flowing
+    // through a virtual device. Gated on onboarding so metering has no cost otherwise.
+    private func refreshSignalIndicators() {
+        guard onboardingOpen else { return }
+        multitrackDetected = availableOutputDevices().contains { $0.looksLikeMultitrackBoard }
+        if coordinator.takeSignalPeak() > signalThreshold {
+            audioDetected = true // latch: once confirmed it stays for this onboarding session
+        }
     }
 
     // Prompts for microphone access when undecided. When already denied macOS shows
@@ -248,6 +273,7 @@ final class AppModel {
                 self?.refreshMicState()
                 self?.reconcileMicPermission()
                 self?.reconcileTopology()
+                self?.refreshSignalIndicators()
                 try? await Task.sleep(for: .seconds(1))
             }
         }

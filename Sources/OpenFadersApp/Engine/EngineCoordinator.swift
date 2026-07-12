@@ -95,6 +95,16 @@ final class EngineCoordinator {
         OpenFadersEngineResolveOutputDevice(configuration.outputDeviceUID, configuration.outputDeviceName)
     }
 
+    func setMetering(_ enabled: Bool) {
+        OpenFadersEngineSetMetering(engine, enabled)
+    }
+
+    // The loudest captured sample magnitude (0...1) since the last call, across all
+    // routes. Used to confirm audio is actually flowing.
+    func takeSignalPeak() -> Float {
+        OpenFadersEngineTakeSignalPeak(engine)
+    }
+
     func status() -> EngineRuntimeStatus {
         var raw = OpenFadersEngineStatus()
         OpenFadersEngineGetStatus(engine, &raw)
