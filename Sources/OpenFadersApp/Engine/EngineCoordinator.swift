@@ -68,6 +68,8 @@ final class EngineCoordinator {
     func start(configuration: AppConfiguration) throws {
         var config = OpenFadersEngineConfig()
         OpenFadersEngineConfigInit(&config)
+        config.syncMode = configuration.adaptiveSync ? kOpenFadersSyncAdaptive
+                                                     : kOpenFadersSyncHardwareTimed
         OpenFadersEngineConfigSetOutput(&config, configuration.outputDeviceUID,
                                         configuration.outputDeviceName)
         for device in configuration.devices {

@@ -10,6 +10,8 @@ struct SettingsRootView: View {
                 .tabItem { Label("Devices", systemImage: "square.stack.3d.up.fill") }
             RoutingTab()
                 .tabItem { Label("Routing", systemImage: "arrow.triangle.branch") }
+            AudioTab()
+                .tabItem { Label("Audio", systemImage: "dial.medium") }
             StartupTab()
                 .tabItem { Label("Startup", systemImage: "power") }
             AboutTab()
@@ -137,6 +139,31 @@ struct StartupTab: View {
             }
         }
         .formStyle(.grouped)
+    }
+}
+
+// Audio: the clock-sync mode. Hardware-timed is the safe default; adaptive drift
+// correction needs the updated driver's clock-slave property.
+struct AudioTab: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        @Bindable var model = model
+        Form {
+            Section {
+                Toggle("Adaptive drift correction", isOn: $model.configuration.adaptiveSync)
+            } header: {
+                Text("Clock sync")
+            } footer: {
+                Text("Hardware-timed routing (off) relies on buffer headroom and is the tested default. Adaptive drift correction continuously matches each virtual device's clock to the RODECaster for glitch-free long sessions; it needs the current OpenFaders driver installed.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .formStyle(.grouped)
+        .onChange(of: model.configuration.adaptiveSync) { _, _ in
+            model.applyConfigurationChange()
+        }
     }
 }
 

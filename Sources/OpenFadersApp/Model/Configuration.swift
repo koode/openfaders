@@ -24,6 +24,9 @@ struct DeviceSetting: Codable, Identifiable, Hashable {
 struct AppConfiguration: Codable, Hashable {
     var outputDeviceUID: String
     var outputDeviceName: String
+    // Off by default: hardware-timed routing is proven and needs no driver support.
+    // Adaptive drift correction requires the updated driver's clock-slave property.
+    var adaptiveSync: Bool
     var devices: [DeviceSetting]
 
     static let defaultOutputName = "RODECaster Pro II Main Multitrack"
@@ -34,6 +37,7 @@ struct AppConfiguration: Codable, Hashable {
         AppConfiguration(
             outputDeviceUID: "",
             outputDeviceName: defaultOutputName,
+            adaptiveSync: false,
             devices: [
                 DeviceSetting(uid: "app.openfaders.device.0", displayName: "OpenFaders System",
                               boardSource: "System", channelPairStart: 0, enabled: true),

@@ -4,7 +4,8 @@
 // "Main Multitrack" output, then runs until interrupted. The menu-bar app uses
 // the same OpenFadersEngine library; this tool is the headless way to exercise it.
 //
-// Usage: openfaders-route ["Output Device Name"]
+// Usage: openfaders-route [--adaptive] ["Output Device Name"]
+//   --adaptive  enable clock-sync drift correction (needs the updated driver)
 
 #include "OpenFadersEngine.h"
 
@@ -22,8 +23,13 @@ static void HandleInterrupt(int signalNumber) {
 
 int main(int argc, const char **argv) {
     const char *outputDeviceName = "RODECaster Pro II Main Multitrack";
-    if (argc > 1) {
-        outputDeviceName = argv[1];
+    bool adaptiveSync = false;
+    for (int argIndex = 1; argIndex < argc; ++argIndex) {
+        if (strcmp(argv[argIndex], "--adaptive") == 0) {
+            adaptiveSync = true;
+        } else {
+            outputDeviceName = argv[argIndex];
+        }
     }
 
     // Default mapping: five virtual devices to the five stereo pairs of the
@@ -40,7 +46,7 @@ int main(int argc, const char **argv) {
     OpenFadersEngineConfig config;
     memset(&config, 0, sizeof(config));
     strncpy(config.outputDeviceName, outputDeviceName, sizeof(config.outputDeviceName) - 1);
-    config.syncMode = kOpenFadersSyncHardwareTimed;
+    config.syncMode = adaptiveSync ? kOpenFadersSyncAdaptive : kOpenFadersSyncHardwareTimed;
     config.routeCount = (uint32_t)(sizeof(defaults) / sizeof(defaults[0]));
     for (uint32_t index = 0; index < config.routeCount; ++index) {
         strncpy(config.routes[index].virtualDeviceUID, defaults[index].uid,
@@ -65,9 +71,10 @@ int main(int argc, const char **argv) {
 
     OpenFadersEngineStatus status;
     OpenFadersEngineGetStatus(engine, &status);
-    printf("Output: \"%s\" — routing %u device(s). Play audio into an OpenFaders device to hear it on "
-           "the board. Ctrl-C to stop.\n",
-           outputDeviceName, status.activeRouteCount);
+    printf("Output: \"%s\" — routing %u device(s), %s. Play audio into an OpenFaders device to hear "
+           "it on the board. Ctrl-C to stop.\n",
+           outputDeviceName, status.activeRouteCount,
+           adaptiveSync ? "adaptive clock sync" : "hardware-timed");
 
     signal(SIGINT, HandleInterrupt);
     signal(SIGTERM, HandleInterrupt);

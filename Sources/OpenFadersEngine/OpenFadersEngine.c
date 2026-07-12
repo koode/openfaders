@@ -15,22 +15,46 @@
 
 #include <AudioToolbox/AudioToolbox.h>
 #include <CoreAudio/CoreAudio.h>
+#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 enum {
     kMaxRenderFrames = 8192, // clamp for the fixed-size real-time scratch buffers
     kEngineChannels = 2,
+    kTargetFillFrames = kEngineRingCapacityFrames / 2, // hold the ring half full
 };
 
 #define kEngineSampleRate 48000.0
+
+// Custom driver property that slaves a virtual device's clock. This four-character
+// selector must match kOpenFadersRateScalarSelector in the driver; the two targets
+// share it as an ABI contract rather than a header.
+enum { kOpenFadersRateScalarSelector = 'rtsc' };
+
+// Drift-correction control loop. A PI controller on a normal-priority thread reads
+// each ring's fill (the integrated phase error between the virtual and hardware
+// clocks) four times a second and nudges the device's rate scalar to hold the fill
+// at target. Gains are critically damped near 0.016 Hz; the clamp bounds the
+// authority to +/-100 ppm. These are conservative starting values and may want
+// tuning against a measured crystal mismatch.
+#define kControlPeriodSeconds 0.25
+#define kProportionalGain 0.2                             // Kp, 1/s
+#define kIntegralGain 0.01                                // Ki, 1/s^2
+#define kMaxRateScalar 1.0e-4                             // +/-100 ppm
+#define kIntegralClamp (kMaxRateScalar / kIntegralGain)   // anti-windup bound on the integrator
 
 typedef struct {
     AudioObjectID virtualDeviceID;
     AudioUnit inputUnit;
     uint32_t outputChannelPairStart;
     EngineRing ring;
+
+    // Control-loop state, touched only by the control thread.
+    double controlIntegral;
+    double currentRateScalar;
 } EngineRoute;
 
 struct OpenFadersEngine {
@@ -41,6 +65,11 @@ struct OpenFadersEngine {
     bool running;
     OpenFadersSyncMode syncMode;
     EngineRoute routes[kOpenFadersMaxRoutes];
+
+    // Drift-correction control thread.
+    _Atomic bool controlRunning;
+    bool controlThreadStarted;
+    pthread_t controlThread;
 };
 
 #pragma mark - Core Audio discovery helpers
@@ -376,6 +405,93 @@ static OSStatus BuildOutputUnit(OpenFadersEngine *engine) {
     return AudioUnitInitialize(engine->outputUnit);
 }
 
+#pragma mark - Drift-correction control loop
+
+// Pushes a rate correction to a virtual device via the driver's custom property.
+// Called only from the control thread. It is marshaled as a CFNumber, which is how
+// the driver receives it across the HAL boundary.
+static void SetDeviceRateScalar(AudioObjectID deviceID, double scalar) {
+    AudioObjectPropertyAddress address = {kOpenFadersRateScalarSelector,
+                                          kAudioObjectPropertyScopeGlobal,
+                                          kAudioObjectPropertyElementMain};
+    CFNumberRef number = CFNumberCreate(kCFAllocatorDefault, kCFNumberDoubleType, &scalar);
+    if (number == NULL) {
+        return;
+    }
+    AudioObjectSetPropertyData(deviceID, &address, 0, NULL, (UInt32)sizeof(CFPropertyListRef),
+                               &number);
+    CFRelease(number);
+}
+
+// One PI update for a single route: drive the ring fill toward target by nudging
+// the device rate scalar, with a clamped output and an anti-windup integrator.
+static void UpdateRouteControl(EngineRoute *route) {
+    uint64_t fillFrames = EngineRingFillFrames(&route->ring);
+    double errorSeconds = ((double)kTargetFillFrames - (double)fillFrames) / kEngineSampleRate;
+
+    double proposedIntegral = route->controlIntegral + errorSeconds * kControlPeriodSeconds;
+    if (proposedIntegral > kIntegralClamp) {
+        proposedIntegral = kIntegralClamp;
+    } else if (proposedIntegral < -kIntegralClamp) {
+        proposedIntegral = -kIntegralClamp;
+    }
+
+    double output = kProportionalGain * errorSeconds + kIntegralGain * proposedIntegral;
+    if (output > kMaxRateScalar) {
+        output = kMaxRateScalar; // saturated: freeze the integrator (anti-windup)
+    } else if (output < -kMaxRateScalar) {
+        output = -kMaxRateScalar;
+    } else {
+        route->controlIntegral = proposedIntegral; // commit growth only when unsaturated
+    }
+
+    route->currentRateScalar = output;
+    SetDeviceRateScalar(route->virtualDeviceID, output);
+}
+
+static void *ControlLoopMain(void *context) {
+    OpenFadersEngine *engine = (OpenFadersEngine *)context;
+    while (atomic_load_explicit(&engine->controlRunning, memory_order_acquire)) {
+        for (uint32_t index = 0; index < engine->routeCount; ++index) {
+            UpdateRouteControl(&engine->routes[index]);
+        }
+        usleep((useconds_t)(kControlPeriodSeconds * 1.0e6));
+    }
+    return NULL;
+}
+
+// Starts the control thread when adaptive sync is selected. In hardware-timed mode
+// the ring headroom alone absorbs drift, so no loop runs.
+static void StartControlLoop(OpenFadersEngine *engine) {
+    if (engine->syncMode != kOpenFadersSyncAdaptive) {
+        return;
+    }
+    for (uint32_t index = 0; index < engine->routeCount; ++index) {
+        engine->routes[index].controlIntegral = 0.0;
+        engine->routes[index].currentRateScalar = 0.0;
+    }
+    atomic_store_explicit(&engine->controlRunning, true, memory_order_release);
+    if (pthread_create(&engine->controlThread, NULL, ControlLoopMain, engine) == 0) {
+        engine->controlThreadStarted = true;
+    } else {
+        atomic_store_explicit(&engine->controlRunning, false, memory_order_release);
+    }
+}
+
+static void StopControlLoop(OpenFadersEngine *engine) {
+    if (!engine->controlThreadStarted) {
+        return;
+    }
+    atomic_store_explicit(&engine->controlRunning, false, memory_order_release);
+    pthread_join(engine->controlThread, NULL);
+    engine->controlThreadStarted = false;
+
+    // Release each device's clock back to free-running.
+    for (uint32_t index = 0; index < engine->routeCount; ++index) {
+        SetDeviceRateScalar(engine->routes[index].virtualDeviceID, 0.0);
+    }
+}
+
 #pragma mark - Config builders
 
 void OpenFadersEngineConfigInit(OpenFadersEngineConfig *config) {
@@ -431,6 +547,7 @@ static void WriteError(char *outError, uint32_t errorCapacity, const char *messa
 
 // Tears down all audio units without freeing the engine, leaving it idle.
 static void TeardownUnits(OpenFadersEngine *engine) {
+    StopControlLoop(engine);
     if (engine->outputUnit != NULL) {
         AudioOutputUnitStop(engine->outputUnit);
         AudioUnitUninitialize(engine->outputUnit);
@@ -525,6 +642,7 @@ bool OpenFadersEngineStart(OpenFadersEngine *engine, const OpenFadersEngineConfi
         return false;
     }
 
+    StartControlLoop(engine);
     engine->running = true;
     return true;
 }
