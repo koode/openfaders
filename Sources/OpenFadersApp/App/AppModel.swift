@@ -48,9 +48,12 @@ final class AppModel {
     private(set) var isInstallingDriver = false
     private(set) var lastStartError: String?
     private(set) var lastInstallError: String?
+    private(set) var micState: MicrophonePermission.State = MicrophonePermission.state
 
     @ObservationIgnored private let coordinator = EngineCoordinator()
     @ObservationIgnored private var pollingTask: Task<Void, Never>?
+    @ObservationIgnored private var lastOutputDeviceID: UInt32 = 0
+    @ObservationIgnored private var lastMicState: MicrophonePermission.State = MicrophonePermission.state
 
     private init() {
         configuration = ConfigurationStore.loadConfiguration()
@@ -60,6 +63,7 @@ final class AppModel {
         if routingEnabled {
             startEngine()
         }
+        lastOutputDeviceID = coordinator.resolveOutputDeviceID(configuration)
         startPolling()
     }
 
@@ -141,7 +145,35 @@ final class AppModel {
     }
 
     func presentOnboarding() {
+        ConfigurationStore.saveHasSeenOnboarding(true)
         OnboardingPresenter.shared.show()
+    }
+
+    // Shows onboarding on first launch, and thereafter whenever the driver or
+    // microphone access still needs attention.
+    func showOnboardingIfNeeded() {
+        let isFirstLaunch = !ConfigurationStore.loadHasSeenOnboarding()
+        // Auto-present on first launch, and when the driver is missing (nothing works
+        // without it). Don't force the window forward on later launches just because
+        // the mic is denied or the driver is merely outdated — that would steal focus
+        // at every login; those are surfaced in the menu and shown when setup opens.
+        if isFirstLaunch || driverInstallState == .notInstalled {
+            presentOnboarding()
+        }
+    }
+
+    // MARK: - Microphone permission
+
+    func refreshMicState() {
+        micState = MicrophonePermission.state
+    }
+
+    // Prompts for microphone access when undecided. When already denied macOS shows
+    // no prompt, so the onboarding points the user at System Settings instead.
+    func requestMicrophoneAccess() async {
+        _ = await MicrophonePermission.request()
+        refreshMicState()
+        reconcileMicPermission()
     }
 
     // MARK: - Engine control
@@ -156,7 +188,37 @@ final class AppModel {
         } catch {
             lastStartError = error.localizedDescription
         }
+        lastOutputDeviceID = coordinator.resolveOutputDeviceID(configuration)
         refreshStatus()
+    }
+
+    // Notices when Core Audio republishes devices with new identities (coreaudiod
+    // restart, unplug/replug, Multitrack toggle) and re-establishes routing without
+    // the user rescanning. The output device's object ID changing is the signal:
+    // its UID is stable, but the ID is reassigned whenever the audio server rebuilds
+    // its device list, which also invalidates the units the engine was running.
+    private func reconcileTopology() {
+        let currentOutputID = coordinator.resolveOutputDeviceID(configuration)
+        guard currentOutputID != lastOutputDeviceID else { return }
+        resolveOutputDeviceIfNeeded()
+        if routingEnabled {
+            startEngine()
+        }
+        // Record what we resolved AFTER any config change or restart so reconcile
+        // converges to a no-op next tick — including when the driver is not installed
+        // yet, in which case startEngine returns early and cannot record it itself.
+        lastOutputDeviceID = coordinator.resolveOutputDeviceID(configuration)
+    }
+
+    // When microphone access flips to granted, the engine must (re)start: it may have
+    // started earlier without permission (capturing silence), and a permission change
+    // does not republish the audio devices, so reconcileTopology never reacts to it.
+    private func reconcileMicPermission() {
+        let previous = lastMicState
+        lastMicState = micState
+        if previous != .granted, micState == .granted, routingEnabled {
+            startEngine()
+        }
     }
 
     // If we only know the output device by name (a fresh install), find its UID so
@@ -183,6 +245,9 @@ final class AppModel {
             while !Task.isCancelled {
                 self?.refreshStatus()
                 self?.refreshDriverStatus()
+                self?.refreshMicState()
+                self?.reconcileMicPermission()
+                self?.reconcileTopology()
                 try? await Task.sleep(for: .seconds(1))
             }
         }

@@ -83,4 +83,14 @@ enum ConfigurationStore {
     static func saveRoutingEnabled(_ enabled: Bool) {
         UserDefaults.standard.set(enabled, forKey: routingEnabledKey)
     }
+
+    private static let seenOnboardingKey = "seenOnboarding.v1"
+
+    static func loadHasSeenOnboarding() -> Bool {
+        UserDefaults.standard.bool(forKey: seenOnboardingKey)
+    }
+
+    static func saveHasSeenOnboarding(_ seen: Bool) {
+        UserDefaults.standard.set(seen, forKey: seenOnboardingKey)
+    }
 }

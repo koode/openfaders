@@ -220,6 +220,15 @@ static AudioObjectID FindOutputDeviceByName(const char *name) {
     return match;
 }
 
+uint32_t OpenFadersEngineResolveOutputDevice(const char *outputDeviceUID,
+                                             const char *outputDeviceName) {
+    AudioObjectID deviceID = FindDeviceByUID(outputDeviceUID);
+    if (deviceID == kAudioObjectUnknown) {
+        deviceID = FindOutputDeviceByName(outputDeviceName);
+    }
+    return (uint32_t)deviceID;
+}
+
 // Re-pins the device's nominal sample rate to 48 kHz so a stale negotiated rate
 // cannot leave the routing mismatched. Best effort.
 static void PinNominalSampleRate(AudioObjectID deviceID) {
@@ -336,40 +345,53 @@ static OSStatus BuildInputUnit(EngineRoute *route) {
     }
     OSStatus status = AudioComponentInstanceNew(component, &route->inputUnit);
     if (status != noErr) {
+        route->inputUnit = NULL;
         return status;
     }
 
+    // From here the unit exists, so any failure disposes it (goto fail) rather than
+    // leak the instance and the device reference it holds. A stop+start on a
+    // topology change can otherwise leak a unit per failed attempt.
     UInt32 enableFlag = 1;
     status = AudioUnitSetProperty(route->inputUnit, kAudioOutputUnitProperty_EnableIO,
                                   kAudioUnitScope_Input, 1, &enableFlag, sizeof(enableFlag));
     if (status != noErr) {
-        return status;
+        goto fail;
     }
     UInt32 disableFlag = 0;
     status = AudioUnitSetProperty(route->inputUnit, kAudioOutputUnitProperty_EnableIO,
                                   kAudioUnitScope_Output, 0, &disableFlag, sizeof(disableFlag));
     if (status != noErr) {
-        return status;
+        goto fail;
     }
     status = AudioUnitSetProperty(route->inputUnit, kAudioOutputUnitProperty_CurrentDevice,
                                   kAudioUnitScope_Global, 0, &route->virtualDeviceID,
                                   sizeof(route->virtualDeviceID));
     if (status != noErr) {
-        return status;
+        goto fail;
     }
     AudioStreamBasicDescription format = MakeInterleavedFloatFormat(kEngineChannels);
     status = AudioUnitSetProperty(route->inputUnit, kAudioUnitProperty_StreamFormat,
                                   kAudioUnitScope_Output, 1, &format, sizeof(format));
     if (status != noErr) {
-        return status;
+        goto fail;
     }
     AURenderCallbackStruct callback = {InputRenderCallback, route};
     status = AudioUnitSetProperty(route->inputUnit, kAudioOutputUnitProperty_SetInputCallback,
                                   kAudioUnitScope_Global, 0, &callback, sizeof(callback));
     if (status != noErr) {
-        return status;
+        goto fail;
     }
-    return AudioUnitInitialize(route->inputUnit);
+    status = AudioUnitInitialize(route->inputUnit);
+    if (status != noErr) {
+        goto fail;
+    }
+    return noErr;
+
+fail:
+    AudioComponentInstanceDispose(route->inputUnit);
+    route->inputUnit = NULL;
+    return status;
 }
 
 // Builds the single output unit bound to the physical device. We supply an

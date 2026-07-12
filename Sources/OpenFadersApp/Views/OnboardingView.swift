@@ -14,12 +14,13 @@ struct OnboardingView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     driverStep
+                    micStep
                     infoStep(
-                        number: 2,
+                        number: 3,
                         title: "Set the RODECaster to Multitrack mode",
                         detail: "On the board: Settings ▸ Outputs ▸ Multitrack ▸ USB 1 Input ▸ Expanded. That exposes the ten-channel return OpenFaders routes into. No software can toggle it for you.")
                     infoStep(
-                        number: 3,
+                        number: 4,
                         title: "Send an app to a fader",
                         detail: "Choose an OpenFaders device (System, Game, Music, Virtual A or B) as an app's output, then bring the matching source up on a fader. Only System is monitored by default.")
                 }
@@ -59,6 +60,45 @@ struct OnboardingView: View {
                 Text(error)
                     .font(.caption)
                     .foregroundStyle(.red)
+            }
+        }
+    }
+
+    private var micStep: some View {
+        stepCard(number: 2, title: "Allow microphone access") {
+            Text("OpenFaders captures the audio you send into its virtual devices to forward it to the board. macOS treats that as microphone access; nothing from a microphone is recorded.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+            micStatusRow
+        }
+    }
+
+    @ViewBuilder private var micStatusRow: some View {
+        switch model.micState {
+        case .granted:
+            Label("Microphone access granted", systemImage: "checkmark.circle.fill")
+                .foregroundStyle(.green)
+        case .notDetermined:
+            Button("Allow microphone access") {
+                Task { await model.requestMicrophoneAccess() }
+            }
+            .buttonStyle(.borderedProminent)
+        case .denied:
+            VStack(alignment: .leading, spacing: 6) {
+                Label("Microphone access denied", systemImage: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.orange)
+                Text("Turn it on for OpenFaders in System Settings, then routing can start.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Button("Open System Settings") { MicrophonePermission.openSettings() }
+            }
+        case .restricted:
+            VStack(alignment: .leading, spacing: 6) {
+                Label("Microphone access is restricted", systemImage: "lock.fill")
+                    .foregroundStyle(.orange)
+                Text("A system policy (Screen Time or device management) is blocking microphone access, so routing can't capture audio.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
         }
     }

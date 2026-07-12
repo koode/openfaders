@@ -7,9 +7,7 @@ import SwiftUI
 // installing it without ever opening a terminal.
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
-        if AppModel.shared.driverInstallState != .installed {
-            OnboardingPresenter.shared.show()
-        }
+        AppModel.shared.showOnboardingIfNeeded()
     }
 }
 

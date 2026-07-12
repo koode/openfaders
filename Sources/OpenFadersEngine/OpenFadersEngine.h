@@ -100,6 +100,14 @@ bool OpenFadersEngineConfigAddRoute(OpenFadersEngineConfig *config, const char *
 // to just probe; the return value is clamped to capacity. Safe to call anytime.
 uint32_t OpenFadersEngineCopyOutputDevices(OpenFadersOutputDevice *outDevices, uint32_t capacity);
 
+// Resolves the current object ID of the configured output device (UID preferred,
+// name as a fallback), or 0 if it is not currently present. A caller can poll this
+// to notice when the hardware's identity changes — for example after coreaudiod
+// restarts and republishes every device with new IDs, or the device is unplugged
+// or switched into Multitrack mode — and re-establish routing automatically.
+uint32_t OpenFadersEngineResolveOutputDevice(const char *outputDeviceUID,
+                                             const char *outputDeviceName);
+
 // Creates an idle engine. Returns NULL only on allocation failure.
 OpenFadersEngine *OpenFadersEngineCreate(void);
 

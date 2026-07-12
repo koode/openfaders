@@ -88,6 +88,13 @@ final class EngineCoordinator {
         OpenFadersEngineStop(engine)
     }
 
+    // The current object ID of the configured output device, or 0 if it is not
+    // present. Changes when Core Audio republishes devices (e.g. after coreaudiod
+    // restarts), which is how the app notices it must re-establish routing.
+    func resolveOutputDeviceID(_ configuration: AppConfiguration) -> UInt32 {
+        OpenFadersEngineResolveOutputDevice(configuration.outputDeviceUID, configuration.outputDeviceName)
+    }
+
     func status() -> EngineRuntimeStatus {
         var raw = OpenFadersEngineStatus()
         OpenFadersEngineGetStatus(engine, &raw)

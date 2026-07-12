@@ -1,5 +1,42 @@
 import AppKit
+import AVFoundation
 import ServiceManagement
+
+// The microphone (audio-input) permission the engine needs to capture what apps
+// play into the virtual devices. macOS gates all audio input on this, including the
+// Core Audio capture the engine does.
+enum MicrophonePermission {
+    enum State: Equatable {
+        case granted
+        case denied        // the user declined; fixable in System Settings
+        case restricted    // a system policy (MDM / Screen Time) forbids it; not user-fixable
+        case notDetermined
+    }
+
+    static var state: State {
+        switch AVCaptureDevice.authorizationStatus(for: .audio) {
+        case .authorized: return .granted
+        case .denied: return .denied
+        case .restricted: return .restricted
+        case .notDetermined: return .notDetermined
+        @unknown default: return .notDetermined
+        }
+    }
+
+    // Prompts for access when it has not been decided yet. Returns whether access is
+    // granted afterwards. If it was already denied, this returns false without a
+    // prompt (macOS only shows the prompt once); send the user to System Settings.
+    static func request() async -> Bool {
+        await AVCaptureDevice.requestAccess(for: .audio)
+    }
+
+    static func openSettings() {
+        if let url = URL(string:
+            "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone") {
+            NSWorkspace.shared.open(url)
+        }
+    }
+}
 
 // Wraps the login-item registration. SMAppService.mainApp registers the app itself
 // as a login item; the app (not the installer) owns this so the user's choice is

@@ -125,6 +125,7 @@ targets:
         copy:
           destination: sharedSupport
       - sdk: AudioToolbox.framework
+      - sdk: AVFoundation.framework
       - sdk: CoreAudio.framework
       - sdk: CoreFoundation.framework
       - sdk: ServiceManagement.framework
