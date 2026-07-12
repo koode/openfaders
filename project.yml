@@ -88,3 +88,34 @@ targets:
       - sdk: AudioToolbox.framework
       - sdk: CoreAudio.framework
       - sdk: CoreFoundation.framework
+
+  # The menu-bar app: a SwiftUI accessory that runs the engine in-process and
+  # gives it a native control surface. Targets macOS 14 for the Observation
+  # framework (@Observable) and SettingsLink. Builds ad-hoc for development; the
+  # release pipeline re-signs it with a Developer ID and the hardened runtime.
+  OpenFadersApp:
+    type: application
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources:
+      - path: Sources/OpenFadersApp
+        excludes:
+          - "Support/Info.plist"
+          - "Support/OpenFaders.entitlements"
+    settings:
+      base:
+        PRODUCT_NAME: OpenFaders
+        PRODUCT_BUNDLE_IDENTIFIER: app.openfaders.app
+        INFOPLIST_FILE: Sources/OpenFadersApp/Support/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        CODE_SIGN_ENTITLEMENTS: Sources/OpenFadersApp/Support/OpenFaders.entitlements
+        SWIFT_OBJC_BRIDGING_HEADER: Sources/OpenFadersApp/Support/OpenFaders-Bridging-Header.h
+        SWIFT_VERSION: "5.0"
+        HEADER_SEARCH_PATHS:
+          - $(SRCROOT)/Sources/OpenFadersEngine
+    dependencies:
+      - target: OpenFadersEngine
+      - sdk: AudioToolbox.framework
+      - sdk: CoreAudio.framework
+      - sdk: CoreFoundation.framework
+      - sdk: ServiceManagement.framework
