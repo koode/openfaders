@@ -9,11 +9,36 @@
 #include "OpenFadersDriver.h"
 
 #include <CoreFoundation/CoreFoundation.h>
+#include <os/log.h>
 #include <string.h>
 
 // Manufacturer and model strings shared by every object.
 #define kOpenFadersManufacturerName "OpenFaders"
 #define kOpenFadersModelUID "app.openfaders.model"
+
+// When enabled, property queries that return an error are logged with their
+// four-character selector and scope. This is how we find the property that makes
+// coreaudiod reject a device during registration. It runs on the control thread
+// only, never a real-time path. Turn off for release builds.
+#define OPENFADERS_DEBUG_LOG 1
+
+#if OPENFADERS_DEBUG_LOG
+static void OpenFadersLogPropertyFailure(const char *phase, AudioObjectID objectID,
+                                         const AudioObjectPropertyAddress *address, OSStatus status) {
+    uint32_t selector = address->mSelector;
+    uint32_t scope = address->mScope;
+    os_log(OS_LOG_DEFAULT,
+           "OpenFaders %{public}s FAIL object=%u selector=%{public}c%{public}c%{public}c%{public}c "
+           "scope=%{public}c%{public}c%{public}c%{public}c status=%d",
+           phase, objectID, (char)(selector >> 24), (char)(selector >> 16), (char)(selector >> 8),
+           (char)selector, (char)(scope >> 24), (char)(scope >> 16), (char)(scope >> 8), (char)scope,
+           (int)status);
+}
+#define OPENFADERS_LOG_FAILURE(phase, objectID, address, status)                                    \
+    OpenFadersLogPropertyFailure((phase), (objectID), (address), (status))
+#else
+#define OPENFADERS_LOG_FAILURE(phase, objectID, address, status) ((void)0)
+#endif
 
 #pragma mark - Small writers
 
@@ -179,6 +204,9 @@ static Boolean OpenFadersDevice_HasProperty(const AudioObjectPropertyAddress *ad
         case kAudioDevicePropertyLatency:
         case kAudioDevicePropertyZeroTimeStampPeriod:
         case kAudioDevicePropertyIsHidden:
+        case kAudioDevicePropertyRelatedDevices:
+        case kAudioDevicePropertyClockDomain:
+        case kAudioDevicePropertyDeviceIsRunningSomewhere:
             return true;
         default:
             return false;
@@ -244,7 +272,12 @@ static OSStatus OpenFadersDevice_GetPropertyDataSize(const OpenFadersVirtualDevi
         case kAudioDevicePropertyLatency:
         case kAudioDevicePropertyZeroTimeStampPeriod:
         case kAudioDevicePropertyIsHidden:
+        case kAudioDevicePropertyClockDomain:
+        case kAudioDevicePropertyDeviceIsRunningSomewhere:
             *outDataSize = (UInt32)sizeof(UInt32);
+            return kAudioHardwareNoError;
+        case kAudioDevicePropertyRelatedDevices:
+            *outDataSize = (UInt32)sizeof(AudioObjectID);
             return kAudioHardwareNoError;
         case kAudioDevicePropertyNominalSampleRate:
             *outDataSize = (UInt32)sizeof(Float64);
@@ -312,6 +345,15 @@ static OSStatus OpenFadersDevice_GetPropertyData(const OpenFadersVirtualDevice *
             OPENFADERS_RETURN_SCALAR(UInt32, kOpenFadersZeroTimeStampPeriodFrames);
         case kAudioDevicePropertyIsHidden:
             OPENFADERS_RETURN_SCALAR(UInt32, 0);
+        case kAudioDevicePropertyClockDomain:
+            OPENFADERS_RETURN_SCALAR(UInt32, 0);
+        case kAudioDevicePropertyDeviceIsRunningSomewhere:
+            OPENFADERS_RETURN_SCALAR(UInt32, atomic_load_explicit(&device->isRunning,
+                                                                  memory_order_acquire) ? 1 : 0);
+        case kAudioDevicePropertyRelatedDevices: {
+            AudioObjectID relatedDevices[1] = {device->deviceObjectID};
+            return OpenFadersWriteObjectIDList(relatedDevices, 1, inDataSize, outDataSize, outData);
+        }
         case kAudioDevicePropertyNominalSampleRate:
             OPENFADERS_RETURN_SCALAR(Float64, kOpenFadersNominalSampleRate);
         case kAudioDevicePropertyAvailableNominalSampleRates: {
@@ -374,6 +416,7 @@ static Boolean OpenFadersStream_HasProperty(const AudioObjectPropertyAddress *ad
         case kAudioStreamPropertyPhysicalFormat:
         case kAudioStreamPropertyAvailableVirtualFormats:
         case kAudioStreamPropertyAvailablePhysicalFormats:
+        case kAudioStreamPropertyLatency:
             return true;
         default:
             return false;
@@ -394,6 +437,7 @@ static OSStatus OpenFadersStream_GetPropertyDataSize(const AudioObjectPropertyAd
         case kAudioStreamPropertyTerminalType:
         case kAudioStreamPropertyStartingChannel:
         case kAudioStreamPropertyIsActive:
+        case kAudioStreamPropertyLatency:
             *outDataSize = (UInt32)sizeof(UInt32);
             return kAudioHardwareNoError;
         case kAudioStreamPropertyVirtualFormat:
@@ -431,6 +475,8 @@ static OSStatus OpenFadersStream_GetPropertyData(const OpenFadersVirtualDevice *
             OPENFADERS_RETURN_SCALAR(UInt32, 1);
         case kAudioStreamPropertyIsActive:
             OPENFADERS_RETURN_SCALAR(UInt32, 1);
+        case kAudioStreamPropertyLatency:
+            OPENFADERS_RETURN_SCALAR(UInt32, 0);
         case kAudioStreamPropertyVirtualFormat:
         case kAudioStreamPropertyPhysicalFormat: {
             if (inDataSize < sizeof(AudioStreamBasicDescription)) {
@@ -510,18 +556,27 @@ OSStatus OpenFaders_GetPropertyDataSize(AudioServerPlugInDriverRef inDriver, Aud
     (void)inQualifierDataSize;
     (void)inQualifierData;
     uint32_t deviceIndex = 0;
+    OSStatus status;
     switch (OpenFadersClassifyObject(inObjectID, &deviceIndex)) {
         case kOpenFadersObjectClass_PlugIn:
-            return OpenFadersPlugIn_GetPropertyDataSize(inAddress, outDataSize);
+            status = OpenFadersPlugIn_GetPropertyDataSize(inAddress, outDataSize);
+            break;
         case kOpenFadersObjectClass_Device:
-            return OpenFadersDevice_GetPropertyDataSize(&gOpenFadersDriver.devices[deviceIndex],
-                                                        inAddress, outDataSize);
+            status = OpenFadersDevice_GetPropertyDataSize(&gOpenFadersDriver.devices[deviceIndex],
+                                                          inAddress, outDataSize);
+            break;
         case kOpenFadersObjectClass_OutputStream:
         case kOpenFadersObjectClass_InputStream:
-            return OpenFadersStream_GetPropertyDataSize(inAddress, outDataSize);
+            status = OpenFadersStream_GetPropertyDataSize(inAddress, outDataSize);
+            break;
         default:
-            return kAudioHardwareBadObjectError;
+            status = kAudioHardwareBadObjectError;
+            break;
     }
+    if (status != kAudioHardwareNoError) {
+        OPENFADERS_LOG_FAILURE("GetPropertyDataSize", inObjectID, inAddress, status);
+    }
+    return status;
 }
 
 OSStatus OpenFaders_GetPropertyData(AudioServerPlugInDriverRef inDriver, AudioObjectID inObjectID,
@@ -532,22 +587,32 @@ OSStatus OpenFaders_GetPropertyData(AudioServerPlugInDriverRef inDriver, AudioOb
     (void)inDriver;
     (void)inClientProcessID;
     uint32_t deviceIndex = 0;
+    OSStatus status;
     switch (OpenFadersClassifyObject(inObjectID, &deviceIndex)) {
         case kOpenFadersObjectClass_PlugIn:
-            return OpenFadersPlugIn_GetPropertyData(inAddress, inQualifierDataSize, inQualifierData,
-                                                    inDataSize, outDataSize, outData);
+            status = OpenFadersPlugIn_GetPropertyData(inAddress, inQualifierDataSize, inQualifierData,
+                                                      inDataSize, outDataSize, outData);
+            break;
         case kOpenFadersObjectClass_Device:
-            return OpenFadersDevice_GetPropertyData(&gOpenFadersDriver.devices[deviceIndex], inAddress,
-                                                    inDataSize, outDataSize, outData);
+            status = OpenFadersDevice_GetPropertyData(&gOpenFadersDriver.devices[deviceIndex],
+                                                      inAddress, inDataSize, outDataSize, outData);
+            break;
         case kOpenFadersObjectClass_OutputStream:
-            return OpenFadersStream_GetPropertyData(&gOpenFadersDriver.devices[deviceIndex], false,
-                                                    inAddress, inDataSize, outDataSize, outData);
+            status = OpenFadersStream_GetPropertyData(&gOpenFadersDriver.devices[deviceIndex], false,
+                                                      inAddress, inDataSize, outDataSize, outData);
+            break;
         case kOpenFadersObjectClass_InputStream:
-            return OpenFadersStream_GetPropertyData(&gOpenFadersDriver.devices[deviceIndex], true,
-                                                    inAddress, inDataSize, outDataSize, outData);
+            status = OpenFadersStream_GetPropertyData(&gOpenFadersDriver.devices[deviceIndex], true,
+                                                      inAddress, inDataSize, outDataSize, outData);
+            break;
         default:
-            return kAudioHardwareBadObjectError;
+            status = kAudioHardwareBadObjectError;
+            break;
     }
+    if (status != kAudioHardwareNoError) {
+        OPENFADERS_LOG_FAILURE("GetPropertyData", inObjectID, inAddress, status);
+    }
+    return status;
 }
 
 OSStatus OpenFaders_SetPropertyData(AudioServerPlugInDriverRef inDriver, AudioObjectID inObjectID,
