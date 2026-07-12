@@ -12,11 +12,12 @@ settings:
     MARKETING_VERSION: "0.1.0"
     CURRENT_PROJECT_VERSION: "1"
     SWIFT_VERSION: "6.0"
-    # Local development uses ad-hoc signing ("-"). A HAL plug-in signed with a
-    # Developer ID but not notarized is rejected by Gatekeeper on macOS, so the
-    # Core Audio driver service silently refuses to load it. Ad-hoc signing is
-    # not subject to that rule and loads locally. Developer ID signing and
-    # notarization are applied by the packaging pipeline for distribution.
+    # The build signs ad-hoc ("-") so contributors without the maintainer's
+    # certificate can still compile. Ad-hoc will NOT load, though: coreaudiod's
+    # AMFI check rejects ad-hoc signatures (error -423) and requires a recognized
+    # developer certificate chain. Notarization is NOT required to load locally.
+    # The dev reload script (Scripts/reload-driver.sh) re-signs with a Developer
+    # ID before installing; the packaging pipeline signs and notarizes to ship.
     CODE_SIGN_STYLE: Manual
     CODE_SIGN_IDENTITY: "-"
     ENABLE_HARDENED_RUNTIME: NO

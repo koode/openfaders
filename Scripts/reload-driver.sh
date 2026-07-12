@@ -1,12 +1,17 @@
 #!/bin/bash
 #
-# Development reload for the OpenFaders driver. Ad-hoc signs the bundle, installs
-# it into the system HAL directory with a signature-preserving copy and correct
-# ownership, restarts coreaudiod by its launchd PID (which works with SIP on),
-# and reports whether the virtual devices loaded. If they do not, it prints the
-# coreaudiod / AMFI log lines captured across the restart, which name the reason.
+# Development reload for the OpenFaders driver. Signs the bundle with a real
+# developer certificate (coreaudiod's AMFI check rejects ad-hoc signatures with
+# error -423, but does NOT require notarization to load), installs it into the
+# system HAL directory with a signature-preserving copy and correct ownership,
+# restarts coreaudiod by its launchd PID (which works with SIP on), and reports
+# whether the virtual devices loaded. On failure it prints the coreaudiod / AMFI
+# log captured live across the restart, which names the reason.
 #
 # Run with sudo. Restarting coreaudiod briefly interrupts ALL audio on this Mac.
+#
+# The signing identity defaults to the maintainer's Developer ID and can be
+# overridden: OPENFADERS_SIGN_IDENTITY="Apple Development: ..." sudo -E ./reload-driver.sh
 #
 # Usage: sudo ./Scripts/reload-driver.sh [path-to-OpenFadersDriver.driver]
 
@@ -15,6 +20,7 @@ set -euo pipefail
 readonly driver_name="OpenFadersDriver.driver"
 readonly hal_directory="/Library/Audio/Plug-Ins/HAL"
 readonly service_label="system/com.apple.audio.coreaudiod"
+readonly sign_identity="${OPENFADERS_SIGN_IDENTITY:-Developer ID Application: Koode (PXD36584ME)}"
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source_driver="${1:-$repo_root/build/Release/$driver_name}"
 readonly log_capture="/tmp/openfaders-load.log"
@@ -29,9 +35,10 @@ if [[ ! -d "$source_driver" ]]; then
     exit 1
 fi
 
-echo "1/6  Stripping extended attributes and ad-hoc re-signing the source..."
+echo "1/6  Stripping extended attributes and signing with a developer certificate..."
+echo "     identity: $sign_identity"
 xattr -cr "$source_driver"
-codesign --force --sign - "$source_driver"
+codesign --force --options runtime --sign "$sign_identity" "$source_driver"
 codesign -vvv --strict "$source_driver" 2>&1 | sed 's/^/     /'
 
 echo "2/6  Installing with ditto (preserves the signature and bundle layout)..."
@@ -59,7 +66,7 @@ if [[ -n "${coreaudiod_pid:-}" && "$coreaudiod_pid" =~ ^[0-9]+$ ]]; then
 else
     echo "     Could not resolve coreaudiod's PID from launchd." >&2
 fi
-sleep 5
+sleep 6
 kill "$log_stream_pid" 2>/dev/null || true
 
 echo "6/6  Result:"
@@ -67,8 +74,8 @@ if system_profiler SPAudioDataType 2>/dev/null | grep -q 'OpenFaders'; then
     echo "     SUCCESS: OpenFaders devices are loaded:"
     system_profiler SPAudioDataType 2>/dev/null | grep -E 'OpenFaders [1-5]:' | sed 's/^/       /'
 else
-    echo "     Devices did NOT appear. Relevant log lines from the restart:"
-    grep -iE 'openfaders|app\.openfaders|Plug-Ins/HAL|plug-?in|code ?sign|signature|library validation|not valid|reject|denied|amfi|not owned|invalid' \
-        "$log_capture" | head -40 | sed 's/^/       /'
+    echo "     Devices did NOT appear. OpenFaders / AMFI log lines from the restart:"
+    grep -iE 'openfaders|app\.openfaders|not valid|code signature|library validation|amfi|Code=-[0-9]' \
+        "$log_capture" | grep -iE 'openfaders|amfi|not valid|signature|Code=-' | head -30 | sed 's/^/       /'
     echo "     (full capture saved at $log_capture)"
 fi
