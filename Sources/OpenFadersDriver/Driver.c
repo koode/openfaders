@@ -18,17 +18,20 @@ OpenFadersDriverState gOpenFadersDriver = {0};
 // for COM correctness, but the underlying storage is static and never freed.
 static _Atomic uint32_t gInterfaceReferenceCount = 1;
 
-// Default device set for Phase 1: one stereo loopback device per hardware fader
-// pair. Names are our own and become user-configurable in Phase 2.
+// Default device set: one stereo loopback device per RODECaster Pro II Main
+// Multitrack USB return pair. Each name mirrors the board source that pair feeds
+// (device 0 -> channels 0/1 "System", device 1 -> 2/3 "Game", and so on) so the
+// macOS output picker reads the same as the board's own channel. The UIDs stay
+// index-based and stable; only the display names carry the source label.
 static const struct {
     const char *uid;
     const char *name;
 } kOpenFadersDefaultDevices[kOpenFadersDeviceCount] = {
-    {"app.openfaders.device.0", "OpenFaders 1"},
-    {"app.openfaders.device.1", "OpenFaders 2"},
-    {"app.openfaders.device.2", "OpenFaders 3"},
-    {"app.openfaders.device.3", "OpenFaders 4"},
-    {"app.openfaders.device.4", "OpenFaders 5"},
+    {"app.openfaders.device.0", "OpenFaders System"},
+    {"app.openfaders.device.1", "OpenFaders Game"},
+    {"app.openfaders.device.2", "OpenFaders Music"},
+    {"app.openfaders.device.3", "OpenFaders Virtual A"},
+    {"app.openfaders.device.4", "OpenFaders Virtual B"},
 };
 
 #pragma mark - Object classification
