@@ -1,12 +1,17 @@
-// OpenFaders routing engine (Phase 1) implementation.
+// OpenFaders routing engine implementation.
 //
-// For each virtual device, an input AUHAL unit captures the device's mirrored
-// input (what applications played into it) and pushes it into a per-device ring.
-// One output AUHAL unit bound to the physical multichannel device pulls from all
-// the rings and places each device's stereo audio into its channel pair.
+// For each enabled route, an input AUHAL unit captures a virtual device's
+// mirrored input (what applications played into it) and pushes it into a
+// per-route ring. One output AUHAL unit bound to the physical multichannel device
+// pulls from all the rings and places each route's stereo audio into its channel
+// pair.
+//
+// Adaptive clock sync (drift correction) is introduced separately; this file
+// carries the sync mode through the config and leaves the per-device rate control
+// to that later stage. With hardware-timed sync the ring headroom absorbs drift.
 
-#include "RoutingEngine.h"
-#include "RouteRing.h"
+#include "OpenFadersEngine.h"
+#include "EngineRing.h"
 
 #include <AudioToolbox/AudioToolbox.h>
 #include <CoreAudio/CoreAudio.h>
@@ -15,7 +20,6 @@
 #include <string.h>
 
 enum {
-    kMaxRoutes = 16,
     kMaxRenderFrames = 8192, // clamp for the fixed-size real-time scratch buffers
     kEngineChannels = 2,
 };
@@ -26,15 +30,17 @@ typedef struct {
     AudioObjectID virtualDeviceID;
     AudioUnit inputUnit;
     uint32_t outputChannelPairStart;
-    RouteRing ring;
+    EngineRing ring;
 } EngineRoute;
 
-struct RoutingEngine {
+struct OpenFadersEngine {
     AudioObjectID outputDeviceID;
     AudioUnit outputUnit;
     uint32_t outputChannelCount;
     uint32_t routeCount;
-    EngineRoute routes[kMaxRoutes];
+    bool running;
+    OpenFadersSyncMode syncMode;
+    EngineRoute routes[kOpenFadersMaxRoutes];
 };
 
 #pragma mark - Core Audio discovery helpers
@@ -110,7 +116,48 @@ static uint32_t DeviceChannelCount(AudioObjectID deviceID, AudioObjectPropertySc
     return channelCount;
 }
 
+// A device whose Core Audio name mentions a multitrack USB return and that exposes
+// the full ten-channel bank is almost certainly the board we target. This is a
+// functional detection heuristic, not a claim of affiliation.
+static bool LooksLikeMultitrackBoard(const char *name, uint32_t outputChannelCount) {
+    return name != NULL && strstr(name, "Multitrack") != NULL && outputChannelCount >= 10;
+}
+
+uint32_t OpenFadersEngineCopyOutputDevices(OpenFadersOutputDevice *outDevices, uint32_t capacity) {
+    AudioObjectID *devices = NULL;
+    uint32_t deviceCount = CopyDeviceList(&devices);
+    uint32_t written = 0;
+    for (uint32_t index = 0; index < deviceCount; ++index) {
+        uint32_t outputChannelCount = DeviceChannelCount(devices[index], kAudioObjectPropertyScopeOutput);
+        if (outputChannelCount < 2) {
+            continue;
+        }
+        if (outDevices != NULL && written < capacity) {
+            OpenFadersOutputDevice *entry = &outDevices[written];
+            memset(entry, 0, sizeof(*entry));
+            char *name = CopyDeviceStringProperty(devices[index], kAudioObjectPropertyName);
+            char *uid = CopyDeviceStringProperty(devices[index], kAudioDevicePropertyDeviceUID);
+            if (name != NULL) {
+                strncpy(entry->name, name, sizeof(entry->name) - 1);
+            }
+            if (uid != NULL) {
+                strncpy(entry->uid, uid, sizeof(entry->uid) - 1);
+            }
+            entry->outputChannelCount = outputChannelCount;
+            entry->looksLikeMultitrackBoard = LooksLikeMultitrackBoard(name, outputChannelCount);
+            free(name);
+            free(uid);
+        }
+        written += 1;
+    }
+    free(devices);
+    return (capacity == 0 || outDevices == NULL) ? written : (written < capacity ? written : capacity);
+}
+
 static AudioObjectID FindDeviceByUID(const char *uid) {
+    if (uid == NULL || uid[0] == '\0') {
+        return kAudioObjectUnknown;
+    }
     AudioObjectID *devices = NULL;
     uint32_t deviceCount = CopyDeviceList(&devices);
     AudioObjectID match = kAudioObjectUnknown;
@@ -126,6 +173,9 @@ static AudioObjectID FindDeviceByUID(const char *uid) {
 }
 
 static AudioObjectID FindOutputDeviceByName(const char *name) {
+    if (name == NULL || name[0] == '\0') {
+        return kAudioObjectUnknown;
+    }
     AudioObjectID *devices = NULL;
     uint32_t deviceCount = CopyDeviceList(&devices);
     AudioObjectID match = kAudioObjectUnknown;
@@ -152,6 +202,20 @@ static void PinNominalSampleRate(AudioObjectID deviceID) {
     }
 }
 
+// Requests an IO buffer size on the device. Best effort: the HAL may clamp it to a
+// supported range, which is fine.
+static void SetDeviceBufferFrameSize(AudioObjectID deviceID, uint32_t bufferFrames) {
+    if (bufferFrames == 0) {
+        return;
+    }
+    AudioObjectPropertyAddress address = MakeGlobalAddress(kAudioDevicePropertyBufferFrameSize);
+    Boolean settable = false;
+    if (AudioObjectIsPropertySettable(deviceID, &address, &settable) == noErr && settable) {
+        UInt32 value = bufferFrames;
+        AudioObjectSetPropertyData(deviceID, &address, 0, NULL, sizeof(value), &value);
+    }
+}
+
 static AudioStreamBasicDescription MakeInterleavedFloatFormat(uint32_t channelCount) {
     AudioStreamBasicDescription format = {0};
     format.mSampleRate = kEngineSampleRate;
@@ -168,8 +232,8 @@ static AudioStreamBasicDescription MakeInterleavedFloatFormat(uint32_t channelCo
 
 #pragma mark - Real-time callbacks
 
-// Captures one virtual device's stereo input and writes it into that device's
-// ring. inRefCon is the owning EngineRoute.
+// Captures one virtual device's stereo input and writes it into that route's ring.
+// inRefCon is the owning EngineRoute.
 static OSStatus InputRenderCallback(void *inRefCon, AudioUnitRenderActionFlags *ioActionFlags,
                                     const AudioTimeStamp *inTimeStamp, UInt32 inBusNumber,
                                     UInt32 inNumberFrames, AudioBufferList *ioData) {
@@ -187,20 +251,20 @@ static OSStatus InputRenderCallback(void *inRefCon, AudioUnitRenderActionFlags *
     OSStatus status = AudioUnitRender(route->inputUnit, ioActionFlags, inTimeStamp, inBusNumber,
                                       frameCount, &captureList);
     if (status == noErr) {
-        RouteRingWrite(&route->ring, captureScratch, frameCount);
+        EngineRingWrite(&route->ring, captureScratch, frameCount);
     }
     return noErr;
 }
 
-// Fills the physical device's interleaved multichannel output buffer, placing
-// each route's stereo audio at its channel pair. inRefCon is the RoutingEngine.
+// Fills the physical device's interleaved multichannel output buffer, placing each
+// route's stereo audio at its channel pair. inRefCon is the OpenFadersEngine.
 static OSStatus OutputRenderCallback(void *inRefCon, AudioUnitRenderActionFlags *ioActionFlags,
                                      const AudioTimeStamp *inTimeStamp, UInt32 inBusNumber,
                                      UInt32 inNumberFrames, AudioBufferList *ioData) {
     (void)ioActionFlags;
     (void)inTimeStamp;
     (void)inBusNumber;
-    RoutingEngine *engine = (RoutingEngine *)inRefCon;
+    OpenFadersEngine *engine = (OpenFadersEngine *)inRefCon;
     float *output = (float *)ioData->mBuffers[0].mData;
     uint32_t channelCount = engine->outputChannelCount;
 
@@ -214,7 +278,7 @@ static OSStatus OutputRenderCallback(void *inRefCon, AudioUnitRenderActionFlags 
         if (leftChannel + 1 >= channelCount) {
             continue;
         }
-        RouteRingRead(&route->ring, readScratch, frameCount);
+        EngineRingRead(&route->ring, readScratch, frameCount);
         for (uint32_t frame = 0; frame < frameCount; ++frame) {
             output[frame * channelCount + leftChannel + 0] = readScratch[frame * kEngineChannels + 0];
             output[frame * channelCount + leftChannel + 1] = readScratch[frame * kEngineChannels + 1];
@@ -233,9 +297,9 @@ static AudioComponent HALOutputComponent(void) {
     return AudioComponentFindNext(NULL, &description);
 }
 
-// Builds the input unit for one route, following the AUHAL input sequence:
-// enable input bus, disable output bus, bind the device, set the format the unit
-// hands us, install the callback, then initialise.
+// Builds the input unit for one route, following the AUHAL input sequence: enable
+// input bus, disable output bus, bind the device, set the format the unit hands
+// us, install the callback, then initialise.
 static OSStatus BuildInputUnit(EngineRoute *route) {
     AudioComponent component = HALOutputComponent();
     if (component == NULL) {
@@ -282,7 +346,7 @@ static OSStatus BuildInputUnit(EngineRoute *route) {
 // Builds the single output unit bound to the physical device. We supply an
 // interleaved buffer with the device's channel count and fill it in the render
 // callback.
-static OSStatus BuildOutputUnit(RoutingEngine *engine) {
+static OSStatus BuildOutputUnit(OpenFadersEngine *engine) {
     AudioComponent component = HALOutputComponent();
     if (component == NULL) {
         return kAudioHardwareIllegalOperationError;
@@ -312,89 +376,26 @@ static OSStatus BuildOutputUnit(RoutingEngine *engine) {
     return AudioUnitInitialize(engine->outputUnit);
 }
 
-#pragma mark - Public API
+#pragma mark - Lifecycle
 
-RoutingEngine *RoutingEngineStart(const char *outputDeviceName, const RoutingRoute *routes,
-                                  uint32_t routeCount) {
-    if (routeCount > kMaxRoutes) {
-        routeCount = kMaxRoutes;
-    }
-
-    AudioObjectID outputDeviceID = FindOutputDeviceByName(outputDeviceName);
-    if (outputDeviceID == kAudioObjectUnknown) {
-        fprintf(stderr, "OpenFaders: output device not found: \"%s\"\n", outputDeviceName);
-        fprintf(stderr, "  Make sure the RODECaster is connected and set to Multitrack USB mode.\n");
-        return NULL;
-    }
-
-    RoutingEngine *engine = (RoutingEngine *)calloc(1, sizeof(RoutingEngine));
-    if (engine == NULL) {
-        return NULL;
-    }
-    engine->outputDeviceID = outputDeviceID;
-    engine->outputChannelCount = DeviceChannelCount(outputDeviceID, kAudioObjectPropertyScopeOutput);
-    PinNominalSampleRate(outputDeviceID);
-
-    printf("Output device: \"%s\" (%u output channels)\n", outputDeviceName,
-           engine->outputChannelCount);
-
-    for (uint32_t index = 0; index < routeCount; ++index) {
-        AudioObjectID virtualDeviceID = FindDeviceByUID(routes[index].virtualDeviceUID);
-        if (virtualDeviceID == kAudioObjectUnknown) {
-            fprintf(stderr, "OpenFaders: skipping missing virtual device \"%s\"\n",
-                    routes[index].virtualDeviceUID);
-            continue;
-        }
-        EngineRoute *route = &engine->routes[engine->routeCount];
-        route->virtualDeviceID = virtualDeviceID;
-        route->outputChannelPairStart = routes[index].outputChannelPairStart;
-        RouteRingReset(&route->ring);
-        PinNominalSampleRate(virtualDeviceID);
-
-        OSStatus status = BuildInputUnit(route);
-        if (status != noErr) {
-            fprintf(stderr, "OpenFaders: failed to build input for \"%s\" (status %d)\n",
-                    routes[index].virtualDeviceUID, (int)status);
-            continue;
-        }
-        printf("Route: \"%s\" -> output channels %u/%u\n", routes[index].virtualDeviceUID,
-               route->outputChannelPairStart, route->outputChannelPairStart + 1);
-        engine->routeCount += 1;
-    }
-
-    if (engine->routeCount == 0) {
-        fprintf(stderr, "OpenFaders: no virtual devices matched; nothing to route.\n");
-        RoutingEngineStop(engine);
-        return NULL;
-    }
-
-    if (BuildOutputUnit(engine) != noErr) {
-        fprintf(stderr, "OpenFaders: failed to build the output unit.\n");
-        RoutingEngineStop(engine);
-        return NULL;
-    }
-
-    // Start the inputs first so the rings begin filling before the output pulls.
-    for (uint32_t index = 0; index < engine->routeCount; ++index) {
-        AudioOutputUnitStart(engine->routes[index].inputUnit);
-    }
-    if (AudioOutputUnitStart(engine->outputUnit) != noErr) {
-        fprintf(stderr, "OpenFaders: failed to start the output unit.\n");
-        RoutingEngineStop(engine);
-        return NULL;
-    }
-
-    return engine;
+OpenFadersEngine *OpenFadersEngineCreate(void) {
+    return (OpenFadersEngine *)calloc(1, sizeof(OpenFadersEngine));
 }
 
-void RoutingEngineStop(RoutingEngine *engine) {
-    if (engine == NULL) {
-        return;
+static void WriteError(char *outError, uint32_t errorCapacity, const char *message) {
+    if (outError != NULL && errorCapacity > 0) {
+        strncpy(outError, message, errorCapacity - 1);
+        outError[errorCapacity - 1] = '\0';
     }
+}
+
+// Tears down all audio units without freeing the engine, leaving it idle.
+static void TeardownUnits(OpenFadersEngine *engine) {
     if (engine->outputUnit != NULL) {
         AudioOutputUnitStop(engine->outputUnit);
         AudioUnitUninitialize(engine->outputUnit);
         AudioComponentInstanceDispose(engine->outputUnit);
+        engine->outputUnit = NULL;
     }
     for (uint32_t index = 0; index < engine->routeCount; ++index) {
         AudioUnit inputUnit = engine->routes[index].inputUnit;
@@ -402,7 +403,124 @@ void RoutingEngineStop(RoutingEngine *engine) {
             AudioOutputUnitStop(inputUnit);
             AudioUnitUninitialize(inputUnit);
             AudioComponentInstanceDispose(inputUnit);
+            engine->routes[index].inputUnit = NULL;
         }
     }
+    engine->routeCount = 0;
+    engine->outputUnit = NULL;
+}
+
+bool OpenFadersEngineStart(OpenFadersEngine *engine, const OpenFadersEngineConfig *config,
+                           char *outError, uint32_t errorCapacity) {
+    if (engine == NULL || config == NULL) {
+        WriteError(outError, errorCapacity, "Invalid engine or configuration.");
+        return false;
+    }
+    if (engine->running) {
+        OpenFadersEngineStop(engine);
+    }
+
+    AudioObjectID outputDeviceID = FindDeviceByUID(config->outputDeviceUID);
+    if (outputDeviceID == kAudioObjectUnknown) {
+        outputDeviceID = FindOutputDeviceByName(config->outputDeviceName);
+    }
+    if (outputDeviceID == kAudioObjectUnknown) {
+        WriteError(outError, errorCapacity,
+                   "Output device not found. Connect the RODECaster and set it to Multitrack USB mode.");
+        return false;
+    }
+
+    engine->outputDeviceID = outputDeviceID;
+    engine->outputChannelCount = DeviceChannelCount(outputDeviceID, kAudioObjectPropertyScopeOutput);
+    engine->syncMode = config->syncMode;
+    PinNominalSampleRate(outputDeviceID);
+    SetDeviceBufferFrameSize(outputDeviceID, config->bufferFrames);
+
+    uint32_t requestedRoutes = config->routeCount <= kOpenFadersMaxRoutes ? config->routeCount
+                                                                          : kOpenFadersMaxRoutes;
+    engine->routeCount = 0;
+    for (uint32_t index = 0; index < requestedRoutes; ++index) {
+        if (!config->routes[index].enabled) {
+            continue;
+        }
+        AudioObjectID virtualDeviceID = FindDeviceByUID(config->routes[index].virtualDeviceUID);
+        if (virtualDeviceID == kAudioObjectUnknown) {
+            continue; // a device the user disabled or hasn't installed; skip quietly
+        }
+        EngineRoute *route = &engine->routes[engine->routeCount];
+        route->virtualDeviceID = virtualDeviceID;
+        route->outputChannelPairStart = config->routes[index].outputChannelPairStart;
+        route->inputUnit = NULL;
+        EngineRingReset(&route->ring);
+        PinNominalSampleRate(virtualDeviceID);
+
+        OSStatus status = BuildInputUnit(route);
+        if (status != noErr) {
+            WriteError(outError, errorCapacity, "Failed to open a virtual device for capture.");
+            TeardownUnits(engine);
+            return false;
+        }
+        engine->routeCount += 1;
+    }
+
+    if (engine->routeCount == 0) {
+        WriteError(outError, errorCapacity, "No enabled virtual devices were found to route.");
+        TeardownUnits(engine);
+        return false;
+    }
+
+    if (BuildOutputUnit(engine) != noErr) {
+        WriteError(outError, errorCapacity, "Failed to open the output device.");
+        TeardownUnits(engine);
+        return false;
+    }
+
+    // Start the inputs first so the rings begin filling before the output pulls.
+    for (uint32_t index = 0; index < engine->routeCount; ++index) {
+        AudioOutputUnitStart(engine->routes[index].inputUnit);
+    }
+    if (AudioOutputUnitStart(engine->outputUnit) != noErr) {
+        WriteError(outError, errorCapacity, "Failed to start the output device.");
+        TeardownUnits(engine);
+        return false;
+    }
+
+    engine->running = true;
+    return true;
+}
+
+void OpenFadersEngineStop(OpenFadersEngine *engine) {
+    if (engine == NULL || !engine->running) {
+        return;
+    }
+    TeardownUnits(engine);
+    engine->running = false;
+}
+
+void OpenFadersEngineDestroy(OpenFadersEngine *engine) {
+    if (engine == NULL) {
+        return;
+    }
+    OpenFadersEngineStop(engine);
     free(engine);
+}
+
+void OpenFadersEngineGetStatus(OpenFadersEngine *engine, OpenFadersEngineStatus *outStatus) {
+    if (outStatus == NULL) {
+        return;
+    }
+    memset(outStatus, 0, sizeof(*outStatus));
+    if (engine == NULL) {
+        return;
+    }
+    outStatus->running = engine->running;
+    outStatus->activeRouteCount = engine->routeCount;
+    outStatus->outputDevicePresent =
+        engine->running && engine->outputDeviceID != kAudioObjectUnknown;
+    for (uint32_t index = 0; index < engine->routeCount; ++index) {
+        outStatus->overrunFrames +=
+            atomic_load_explicit(&engine->routes[index].ring.overrunFrames, memory_order_relaxed);
+        outStatus->underrunFrames +=
+            atomic_load_explicit(&engine->routes[index].ring.underrunFrames, memory_order_relaxed);
+    }
 }

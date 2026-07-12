@@ -47,10 +47,29 @@ targets:
       - sdk: CoreAudio.framework
       - sdk: CoreFoundation.framework
 
-  # Phase 1 command-line routing tool. Captures each virtual device's mirrored
-  # input and plays it into a channel pair of the physical multitrack output.
-  # This is a diagnostic and proof-of-concept tool; Phase 2 moves the engine
-  # into a shared library used by the menu-bar app.
+  # The routing engine as a reusable static library. The command-line tool and
+  # the menu-bar app both link it, so the real-time core lives in exactly one
+  # place. Pure C; the audio units it builds run in the linking process (in the
+  # app, that means the app owns the microphone/audio-input permission).
+  OpenFadersEngine:
+    type: library.static
+    platform: macOS
+    sources:
+      - path: Sources/OpenFadersEngine
+    settings:
+      base:
+        PRODUCT_NAME: OpenFadersEngine
+        CLANG_ENABLE_OBJC_ARC: NO
+        GCC_C_LANGUAGE_STANDARD: gnu11
+        SKIP_INSTALL: YES
+    dependencies:
+      - sdk: AudioToolbox.framework
+      - sdk: CoreAudio.framework
+      - sdk: CoreFoundation.framework
+
+  # Command-line routing tool. Captures each virtual device's mirrored input and
+  # plays it into a channel pair of the physical multitrack output. A diagnostic
+  # and proof-of-concept front end over the shared engine library.
   OpenFadersRoute:
     type: tool
     platform: macOS
@@ -62,7 +81,10 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: app.openfaders.route
         CLANG_ENABLE_OBJC_ARC: NO
         GCC_C_LANGUAGE_STANDARD: gnu11
+        HEADER_SEARCH_PATHS:
+          - $(SRCROOT)/Sources/OpenFadersEngine
     dependencies:
+      - target: OpenFadersEngine
       - sdk: AudioToolbox.framework
       - sdk: CoreAudio.framework
       - sdk: CoreFoundation.framework
