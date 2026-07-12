@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>en</string>
+	<key>CFBundleExecutable</key>
+	<string>OpenFadersDriver</string>
+	<key>CFBundleIdentifier</key>
+	<string>app.openfaders.driver</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>OpenFaders Driver</string>
+	<key>CFBundlePackageType</key>
+	<string>BNDL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>0.1.0</string>
+	<key>CFBundleVersion</key>
+	<string>1</string>
+	<!-- Maps the Core Audio AudioServerPlugIn type UUID to our factory UUID. -->
+	<key>CFPlugInTypes</key>
+	<dict>
+		<key>443ABAB8-E7B3-491A-B985-BEB9187030DB</key>
+		<array>
+			<string>D3A86A0B-7715-4823-85E1-BA7724F14AB6</string>
+		</array>
+	</dict>
+	<!-- Maps our factory UUID to the C factory function that returns the driver. -->
+	<key>CFPlugInFactories</key>
+	<dict>
+		<key>D3A86A0B-7715-4823-85E1-BA7724F14AB6</key>
+		<string>OpenFadersDriver_Create</string>
+	</dict>
+</dict>
+</plist>
