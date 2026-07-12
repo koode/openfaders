@@ -20,7 +20,7 @@
 // four-character selector and scope. This is how we find the property that makes
 // coreaudiod reject a device during registration. It runs on the control thread
 // only, never a real-time path. Turn off for release builds.
-#define OPENFADERS_DEBUG_LOG 1
+#define OPENFADERS_DEBUG_LOG 0
 
 #if OPENFADERS_DEBUG_LOG
 static void OpenFadersLogPropertyFailure(const char *phase, AudioObjectID objectID,
