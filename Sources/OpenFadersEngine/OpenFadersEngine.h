@@ -77,6 +77,24 @@ typedef struct {
 
 typedef struct OpenFadersEngine OpenFadersEngine;
 
+// Config builders. These exist mainly so callers in languages where writing into
+// fixed-size C char arrays is awkward (Swift) can assemble a configuration with
+// plain C strings. They are equivalent to zeroing the struct and filling the
+// fields by hand.
+
+// Zeroes the config and sets safe defaults (hardware-timed sync, device default
+// buffer).
+void OpenFadersEngineConfigInit(OpenFadersEngineConfig *config);
+
+// Sets the target output device. Either identifier may be empty; the engine
+// prefers the UID and falls back to the name.
+void OpenFadersEngineConfigSetOutput(OpenFadersEngineConfig *config, const char *uid,
+                                     const char *name);
+
+// Appends one route. Returns false if the route table is already full.
+bool OpenFadersEngineConfigAddRoute(OpenFadersEngineConfig *config, const char *virtualDeviceUID,
+                                    uint32_t outputChannelPairStart, bool enabled);
+
 // Fills outDevices (up to capacity) with the output devices that have at least two
 // output channels. Returns the number written. Pass a null buffer with capacity 0
 // to just probe; the return value is clamped to capacity. Safe to call anytime.

@@ -376,6 +376,46 @@ static OSStatus BuildOutputUnit(OpenFadersEngine *engine) {
     return AudioUnitInitialize(engine->outputUnit);
 }
 
+#pragma mark - Config builders
+
+void OpenFadersEngineConfigInit(OpenFadersEngineConfig *config) {
+    if (config == NULL) {
+        return;
+    }
+    memset(config, 0, sizeof(*config));
+    config->syncMode = kOpenFadersSyncHardwareTimed;
+    config->bufferFrames = 0;
+}
+
+void OpenFadersEngineConfigSetOutput(OpenFadersEngineConfig *config, const char *uid,
+                                     const char *name) {
+    if (config == NULL) {
+        return;
+    }
+    config->outputDeviceUID[0] = '\0';
+    config->outputDeviceName[0] = '\0';
+    if (uid != NULL) {
+        strncpy(config->outputDeviceUID, uid, sizeof(config->outputDeviceUID) - 1);
+    }
+    if (name != NULL) {
+        strncpy(config->outputDeviceName, name, sizeof(config->outputDeviceName) - 1);
+    }
+}
+
+bool OpenFadersEngineConfigAddRoute(OpenFadersEngineConfig *config, const char *virtualDeviceUID,
+                                    uint32_t outputChannelPairStart, bool enabled) {
+    if (config == NULL || virtualDeviceUID == NULL || config->routeCount >= kOpenFadersMaxRoutes) {
+        return false;
+    }
+    OpenFadersRoute *route = &config->routes[config->routeCount];
+    memset(route, 0, sizeof(*route));
+    strncpy(route->virtualDeviceUID, virtualDeviceUID, sizeof(route->virtualDeviceUID) - 1);
+    route->outputChannelPairStart = outputChannelPairStart;
+    route->enabled = enabled;
+    config->routeCount += 1;
+    return true;
+}
+
 #pragma mark - Lifecycle
 
 OpenFadersEngine *OpenFadersEngineCreate(void) {
