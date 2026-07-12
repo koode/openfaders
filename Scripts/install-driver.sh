@@ -36,8 +36,7 @@ cp -R "$source_driver" "$hal_directory/$driver_name"
 codesign --verify --strict "$hal_directory/$driver_name"
 echo "Signature verified."
 
-echo "Restarting coreaudiod (system audio will glitch for a moment)..."
-launchctl kickstart -k system/com.apple.audio.coreaudiod
+"$repo_root/Scripts/reload-coreaudiod.sh"
 
 echo
 echo "Done. The OpenFaders output devices should now appear in"
