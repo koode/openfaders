@@ -115,6 +115,15 @@ targets:
           - $(SRCROOT)/Sources/OpenFadersEngine
     dependencies:
       - target: OpenFadersEngine
+      # Ship the driver inside the app (Contents/SharedSupport) and re-sign it on
+      # copy, so the app can install it into the system HAL directory itself,
+      # without the user ever touching the command line.
+      - target: OpenFadersDriver
+        link: false
+        embed: true
+        codeSign: true
+        copy:
+          destination: sharedSupport
       - sdk: AudioToolbox.framework
       - sdk: CoreAudio.framework
       - sdk: CoreFoundation.framework

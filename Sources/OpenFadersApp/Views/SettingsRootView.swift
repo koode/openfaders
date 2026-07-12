@@ -132,13 +132,26 @@ struct StartupTab: View {
 
             Section("Audio driver") {
                 LabeledContent("Status") {
-                    Text(model.driverInstalled ? "Installed" : "Not installed")
-                        .foregroundStyle(model.driverInstalled ? Color.green : Color.orange)
+                    Text(driverStatusText)
+                        .foregroundStyle(model.driverInstallState == .installed ? Color.green : Color.orange)
+                }
+                if model.driverInstallState != .installed {
+                    Button(model.driverInstallState == .outdated ? "Update driver…" : "Install driver…") {
+                        model.presentOnboarding()
+                    }
                 }
                 Button("Reveal in Finder") { DriverStatus.revealInFinder() }
             }
         }
         .formStyle(.grouped)
+    }
+
+    private var driverStatusText: String {
+        switch model.driverInstallState {
+        case .installed: return "Installed"
+        case .outdated: return "Update available"
+        case .notInstalled: return "Not installed"
+        }
     }
 }
 

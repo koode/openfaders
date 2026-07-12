@@ -5,7 +5,8 @@ import SwiftUI
 // the background as soon as the hardware is present.
 @main
 struct OpenFadersApp: App {
-    @State private var model = AppModel()
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+    @State private var model = AppModel.shared
 
     var body: some Scene {
         MenuBarExtra {

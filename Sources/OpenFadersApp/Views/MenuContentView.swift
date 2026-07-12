@@ -11,7 +11,7 @@ struct MenuContentView: View {
 
         if model.routingState == .driverNotInstalled {
             Button("Install audio driver…") {
-                DriverStatus.revealInFinder()
+                model.presentOnboarding()
             }
         } else {
             Text(hardwareLine)
@@ -27,6 +27,10 @@ struct MenuContentView: View {
         .disabled(!model.driverInstalled)
 
         Divider()
+
+        Button("Set Up OpenFaders…") {
+            model.presentOnboarding()
+        }
 
         SettingsLink {
             Text("Settings…")

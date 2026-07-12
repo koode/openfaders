@@ -34,18 +34,25 @@ enum RoutingState: Equatable {
 @MainActor
 @Observable
 final class AppModel {
+    // A single shared instance so the SwiftUI scenes, the app delegate, and the
+    // onboarding window all drive the same state.
+    static let shared = AppModel()
+
     var configuration: AppConfiguration {
         didSet { ConfigurationStore.save(configuration) }
     }
     private(set) var routingEnabled: Bool
     private(set) var status: EngineRuntimeStatus = .idle
     private(set) var driverInstalled: Bool = DriverStatus.isInstalled
+    private(set) var driverInstallState: DriverInstallState = DriverStatus.installState
+    private(set) var isInstallingDriver = false
     private(set) var lastStartError: String?
+    private(set) var lastInstallError: String?
 
     @ObservationIgnored private let coordinator = EngineCoordinator()
     @ObservationIgnored private var pollingTask: Task<Void, Never>?
 
-    init() {
+    private init() {
         configuration = ConfigurationStore.loadConfiguration()
         routingEnabled = ConfigurationStore.loadRoutingEnabled()
 
@@ -109,6 +116,32 @@ final class AppModel {
 
     func refreshDriverStatus() {
         driverInstalled = DriverStatus.isInstalled
+        driverInstallState = DriverStatus.installState
+    }
+
+    // MARK: - Driver installation
+
+    // Installs (or repairs/updates) the bundled driver through the system admin
+    // prompt, then re-checks status and starts routing if it was enabled.
+    func installDriver() async {
+        guard !isInstallingDriver else { return }
+        isInstallingDriver = true
+        lastInstallError = nil
+        let outcome = await DriverInstaller.install()
+        isInstallingDriver = false
+        switch outcome {
+        case .installed:
+            refreshDriverStatus()
+            applyConfigurationChange()
+        case .cancelled:
+            break
+        case .failed(let message):
+            lastInstallError = message
+        }
+    }
+
+    func presentOnboarding() {
+        OnboardingPresenter.shared.show()
     }
 
     // MARK: - Engine control

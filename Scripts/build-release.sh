@@ -31,6 +31,7 @@ readonly configuration="Release"
 readonly build_dir="$project_root/build/$configuration"
 readonly app_bundle="$build_dir/OpenFaders.app"
 readonly driver_bundle="$build_dir/OpenFadersDriver.driver"
+readonly embedded_driver="$app_bundle/Contents/SharedSupport/OpenFadersDriver.driver"
 readonly entitlements="$project_root/Sources/OpenFadersApp/Support/OpenFaders.entitlements"
 
 readonly dist_dir="$project_root/build/dist"
@@ -53,12 +54,16 @@ readonly version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionStrin
 readonly product_pkg="$dist_dir/OpenFaders-$version.pkg"
 
 echo "==> Signing with '$app_identity'"
-# The driver is a passive bundle loaded by coreaudiod: Developer-ID signed and
-# timestamped, but no hardened runtime and no entitlements.
+# The standalone driver the pkg installs into the HAL directory: a passive bundle
+# loaded by coreaudiod, Developer-ID signed and timestamped, no hardened runtime
+# and no entitlements.
 codesign --force --timestamp --sign "$app_identity" "$driver_bundle"
-# The app runs the engine in-process, so it needs the hardened runtime and the
-# audio-input entitlement. It embeds no nested code (the engine is a static lib),
-# so a single signature over the bundle is enough.
+# Sign the app inside-out: first the driver embedded in the app (the copy the
+# app's own installer copies out to the HAL directory), then the app itself with
+# the hardened runtime and the audio-input entitlement. Signing the nested driver
+# first means the app's signature seals a validly signed bundle and notarization
+# passes.
+codesign --force --timestamp --sign "$app_identity" "$embedded_driver"
 codesign --force --options runtime --timestamp --entitlements "$entitlements" \
     --sign "$app_identity" "$app_bundle"
 codesign --verify --strict --verbose=2 "$driver_bundle"
