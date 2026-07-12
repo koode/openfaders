@@ -736,6 +736,15 @@ void OpenFadersEngineSetMetering(OpenFadersEngine *engine, bool enabled) {
     if (engine == NULL) {
         return;
     }
+    if (enabled) {
+        // Drain any stale peak held from a previous session (the callback stops
+        // updating it once metering is off, so a leftover value would otherwise be
+        // read on the next enable and falsely latch "audio detected"). Reset before
+        // enabling so no genuine post-enable peak is wiped.
+        for (uint32_t index = 0; index < engine->routeCount; ++index) {
+            atomic_store_explicit(&engine->routes[index].peakLevel, 0.0f, memory_order_relaxed);
+        }
+    }
     atomic_store_explicit(&engine->meteringEnabled, enabled, memory_order_relaxed);
 }
 
