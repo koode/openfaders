@@ -23,3 +23,6 @@ dist/
 # Editor
 .idea/
 *.swp
+
+# Claude Code harness settings
+.claude/
