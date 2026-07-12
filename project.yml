@@ -9,13 +9,17 @@ options:
 
 settings:
   base:
-    DEVELOPMENT_TEAM: PXD36584ME
-    CODE_SIGN_STYLE: Manual
-    CODE_SIGN_IDENTITY: "Developer ID Application: Koode (PXD36584ME)"
-    ENABLE_HARDENED_RUNTIME: YES
     MARKETING_VERSION: "0.1.0"
     CURRENT_PROJECT_VERSION: "1"
     SWIFT_VERSION: "6.0"
+    # Local development uses ad-hoc signing ("-"). A HAL plug-in signed with a
+    # Developer ID but not notarized is rejected by Gatekeeper on macOS, so the
+    # Core Audio driver service silently refuses to load it. Ad-hoc signing is
+    # not subject to that rule and loads locally. Developer ID signing and
+    # notarization are applied by the packaging pipeline for distribution.
+    CODE_SIGN_STYLE: Manual
+    CODE_SIGN_IDENTITY: "-"
+    ENABLE_HARDENED_RUNTIME: NO
 
 targets:
   # The virtual audio driver: a Core Audio AudioServerPlugIn packaged as a
@@ -39,5 +43,25 @@ targets:
         GCC_C_LANGUAGE_STANDARD: gnu11
         SKIP_INSTALL: YES
     dependencies:
+      - sdk: CoreAudio.framework
+      - sdk: CoreFoundation.framework
+
+  # Phase 1 command-line routing tool. Captures each virtual device's mirrored
+  # input and plays it into a channel pair of the physical multitrack output.
+  # This is a diagnostic and proof-of-concept tool; Phase 2 moves the engine
+  # into a shared library used by the menu-bar app.
+  OpenFadersRoute:
+    type: tool
+    platform: macOS
+    sources:
+      - path: Sources/OpenFadersRoute
+    settings:
+      base:
+        PRODUCT_NAME: openfaders-route
+        PRODUCT_BUNDLE_IDENTIFIER: app.openfaders.route
+        CLANG_ENABLE_OBJC_ARC: NO
+        GCC_C_LANGUAGE_STANDARD: gnu11
+    dependencies:
+      - sdk: AudioToolbox.framework
       - sdk: CoreAudio.framework
       - sdk: CoreFoundation.framework
