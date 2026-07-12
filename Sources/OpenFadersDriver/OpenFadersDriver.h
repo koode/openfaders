@@ -50,6 +50,14 @@ enum {
     kOpenFadersSafetyOffsetFrames = 32,
 };
 
+// Clock-slave control input. A settable custom device property (selector 'rtsc')
+// carries a scalar rate correction the routing engine drives: 0.0 is free-running,
+// positive makes the device clock run faster. It crosses the HAL boundary as a
+// CFNumber (a CFPropertyList value). Nudging it holds the engine's cross-clock ring
+// at a constant fill, cancelling drift against the RODECaster without resampling.
+enum { kOpenFadersRateScalarSelector = 'rtsc' };
+#define kOpenFadersMaxRateScalar 1.0e-4 // clamp: +/-100 ppm of correction authority
+
 // Object identity scheme. The plug-in object has the fixed id
 // kAudioObjectPlugInObject. Every device and its sub-objects get deterministic
 // ids so classifying an AudioObjectID is arithmetic, not a lookup. Each device
@@ -96,10 +104,10 @@ typedef struct {
     _Atomic uint64_t timelineSeed;       // bumped only on a discontinuous reset
     double anchorHostTimeFraction;       // sub-tick remainder, IO thread only
 
-    // Clock-slave seam for Phase 2. A multiplier on host-ticks-per-frame, 1.0 is
-    // free-running. The routing engine will drive it to cancel drift against the
-    // hardware clock. Phase 1 leaves it at 1.0.
-    _Atomic double clockRatio;
+    // Clock-slave seam: a scalar rate correction on the device clock, driven by the
+    // routing engine through the 'rtsc' custom property (kOpenFadersRateScalarSelector).
+    // 0.0 is free-running; positive runs the clock faster, negative slower.
+    _Atomic double rateScalar;
 } OpenFadersVirtualDevice;
 
 // Process-wide driver state, built once at Initialize.

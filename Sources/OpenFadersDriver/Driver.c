@@ -162,7 +162,7 @@ static OSStatus OpenFaders_Initialize(AudioServerPlugInDriverRef inDriver,
         atomic_store_explicit(&device->anchorSampleFrames, 0, memory_order_relaxed);
         atomic_store_explicit(&device->timelineSeed, 0, memory_order_relaxed);
         device->anchorHostTimeFraction = 0.0;
-        atomic_store_explicit(&device->clockRatio, 1.0, memory_order_relaxed);
+        atomic_store_explicit(&device->rateScalar, 0.0, memory_order_relaxed);
         memset(device->ringSamples, 0, sizeof(device->ringSamples));
     }
 
@@ -278,13 +278,14 @@ static OSStatus OpenFaders_GetZeroTimeStamp(AudioServerPlugInDriverRef inDriver,
     uint64_t anchorHost = atomic_load_explicit(&device->anchorHostTime, memory_order_acquire);
     uint64_t anchorFrames = atomic_load_explicit(&device->anchorSampleFrames, memory_order_relaxed);
     uint64_t seed = atomic_load_explicit(&device->timelineSeed, memory_order_acquire);
-    double clockRatio = atomic_load_explicit(&device->clockRatio, memory_order_relaxed);
+    double rateScalar = atomic_load_explicit(&device->rateScalar, memory_order_relaxed);
 
-    double ticksPerFrame = gOpenFadersDriver.hostTicksPerFrame * clockRatio;
+    // A positive scalar makes the clock run faster: fewer host ticks per frame.
+    double ticksPerFrame = gOpenFadersDriver.hostTicksPerFrame / (1.0 + rateScalar);
     double ticksPerPeriod = ticksPerFrame * (double)kOpenFadersZeroTimeStampPeriodFrames;
 
     // Advance the anchor forward by whole periods only, so the reported sample
-    // time is monotonic by construction even when clockRatio is nudged later.
+    // time is monotonic by construction even when rateScalar is nudged later.
     uint64_t now = mach_absolute_time();
     double exactAnchorHost = (double)anchorHost + device->anchorHostTimeFraction;
     double elapsedTicks = (double)now - exactAnchorHost;

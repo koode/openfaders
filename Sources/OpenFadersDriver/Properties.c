@@ -207,6 +207,8 @@ static Boolean OpenFadersDevice_HasProperty(const AudioObjectPropertyAddress *ad
         case kAudioDevicePropertyRelatedDevices:
         case kAudioDevicePropertyClockDomain:
         case kAudioDevicePropertyDeviceIsRunningSomewhere:
+        case kAudioObjectPropertyCustomPropertyInfoList:
+        case kOpenFadersRateScalarSelector:
             return true;
         default:
             return false;
@@ -293,6 +295,12 @@ static OSStatus OpenFadersDevice_GetPropertyDataSize(const OpenFadersVirtualDevi
             return kAudioHardwareNoError;
         case kAudioDevicePropertyPreferredChannelLayout:
             *outDataSize = (UInt32)sizeof(AudioChannelLayout);
+            return kAudioHardwareNoError;
+        case kAudioObjectPropertyCustomPropertyInfoList:
+            *outDataSize = (UInt32)sizeof(AudioServerPlugInCustomPropertyInfo);
+            return kAudioHardwareNoError;
+        case kOpenFadersRateScalarSelector:
+            *outDataSize = (UInt32)sizeof(CFPropertyListRef);
             return kAudioHardwareNoError;
         default:
             return kAudioHardwareUnknownPropertyError;
@@ -394,6 +402,28 @@ static OSStatus OpenFadersDevice_GetPropertyData(const OpenFadersVirtualDevice *
             memset(layout, 0, sizeof(AudioChannelLayout));
             layout->mChannelLayoutTag = kAudioChannelLayoutTag_Stereo;
             *outDataSize = (UInt32)sizeof(AudioChannelLayout);
+            return kAudioHardwareNoError;
+        }
+        case kAudioObjectPropertyCustomPropertyInfoList: {
+            if (inDataSize < sizeof(AudioServerPlugInCustomPropertyInfo)) {
+                *outDataSize = 0; // caller probed with too small a buffer; report nothing
+                return kAudioHardwareNoError;
+            }
+            AudioServerPlugInCustomPropertyInfo *info = (AudioServerPlugInCustomPropertyInfo *)outData;
+            info[0].mSelector = kOpenFadersRateScalarSelector;
+            info[0].mPropertyDataType = kAudioServerPlugInCustomPropertyDataTypeCFPropertyList;
+            info[0].mQualifierDataType = kAudioServerPlugInCustomPropertyDataTypeNone;
+            *outDataSize = (UInt32)sizeof(AudioServerPlugInCustomPropertyInfo);
+            return kAudioHardwareNoError;
+        }
+        case kOpenFadersRateScalarSelector: {
+            if (inDataSize < sizeof(CFPropertyListRef)) {
+                return kAudioHardwareBadPropertySizeError;
+            }
+            double scalar = atomic_load_explicit(&device->rateScalar, memory_order_relaxed);
+            CFNumberRef number = CFNumberCreate(kCFAllocatorDefault, kCFNumberDoubleType, &scalar);
+            *((CFPropertyListRef *)outData) = number; // the HAL takes ownership of this +1 reference
+            *outDataSize = (UInt32)sizeof(CFPropertyListRef);
             return kAudioHardwareNoError;
         }
         default:
@@ -536,7 +566,8 @@ OSStatus OpenFaders_IsPropertySettable(AudioServerPlugInDriverRef inDriver, Audi
 
     Boolean settable = false;
     if (objectClass == kOpenFadersObjectClass_Device) {
-        settable = (inAddress->mSelector == kAudioDevicePropertyNominalSampleRate);
+        settable = (inAddress->mSelector == kAudioDevicePropertyNominalSampleRate ||
+                    inAddress->mSelector == kOpenFadersRateScalarSelector);
     } else if (objectClass == kOpenFadersObjectClass_OutputStream ||
                objectClass == kOpenFadersObjectClass_InputStream) {
         settable = (inAddress->mSelector == kAudioStreamPropertyVirtualFormat ||
@@ -654,6 +685,33 @@ OSStatus OpenFaders_SetPropertyData(AudioServerPlugInDriverRef inDriver, AudioOb
                                 requestedFormat->mChannelsPerFrame == canonicalFormat.mChannelsPerFrame &&
                                 requestedFormat->mBitsPerChannel == canonicalFormat.mBitsPerChannel;
         return matchesCanonical ? kAudioHardwareNoError : kAudioHardwareIllegalOperationError;
+    }
+
+    // The clock-slave rate correction from the routing engine. It arrives as a
+    // CFNumber marshaled across the HAL boundary; reading it as a raw double would
+    // read garbage. Decode it, clamp to the authority limit, and release the HAL's
+    // reference (a documented leak otherwise).
+    if (objectClass == kOpenFadersObjectClass_Device &&
+        inAddress->mSelector == kOpenFadersRateScalarSelector) {
+        if (inDataSize < sizeof(CFPropertyListRef)) {
+            return kAudioHardwareBadPropertySizeError;
+        }
+        CFPropertyListRef value = *((const CFPropertyListRef *)inData);
+        if (value != NULL && CFGetTypeID(value) == CFNumberGetTypeID()) {
+            double scalar = 0.0;
+            CFNumberGetValue((CFNumberRef)value, kCFNumberDoubleType, &scalar);
+            if (scalar > kOpenFadersMaxRateScalar) {
+                scalar = kOpenFadersMaxRateScalar;
+            } else if (scalar < -kOpenFadersMaxRateScalar) {
+                scalar = -kOpenFadersMaxRateScalar;
+            }
+            atomic_store_explicit(&gOpenFadersDriver.devices[deviceIndex].rateScalar, scalar,
+                                  memory_order_relaxed);
+        }
+        if (value != NULL) {
+            CFRelease(value);
+        }
+        return kAudioHardwareNoError;
     }
 
     return kAudioHardwareUnknownPropertyError;
