@@ -1,0 +1,25 @@
+# macOS
+.DS_Store
+
+# Xcode / xcodegen (the project is generated from project.yml)
+*.xcodeproj
+*.xcworkspace
+xcuserdata/
+DerivedData/
+build/
+.build/
+*.xcresult
+
+# Swift Package Manager
+.swiftpm/
+
+# Signing / notarization artifacts
+*.p12
+*.cer
+notarization-*.json
+*.zip
+dist/
+
+# Editor
+.idea/
+*.swp
