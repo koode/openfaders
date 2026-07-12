@@ -1,0 +1,26 @@
+#!/bin/bash
+#
+# OpenFaders installer postinstall, run as root after the app and driver are in
+# place. It restarts coreaudiod so the virtual devices appear without a reboot,
+# preferring `launchctl kickstart` and falling back to signalling the exact
+# launchd PID when System Integrity Protection refuses kickstart (never a process
+# name/pattern kill). It never fails the install: if the restart cannot happen the
+# devices load on the next reboot. Restarting coreaudiod briefly interrupts all
+# audio on this Mac.
+
+set -uo pipefail
+
+readonly service_label="system/com.apple.audio.coreaudiod"
+
+if launchctl kickstart -k "$service_label" 2>/dev/null; then
+    exit 0
+fi
+
+coreaudiod_pid="$(launchctl print "$service_label" 2>/dev/null \
+    | awk '/^[[:space:]]*pid[[:space:]]*=/{print $3; exit}')"
+
+if [[ -n "${coreaudiod_pid:-}" && "$coreaudiod_pid" =~ ^[0-9]+$ ]]; then
+    kill "$coreaudiod_pid" 2>/dev/null || true
+fi
+
+exit 0
