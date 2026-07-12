@@ -1,0 +1,43 @@
+name: OpenFaders
+
+options:
+  bundleIdPrefix: app.openfaders
+  deploymentTarget:
+    macOS: "13.0"
+  createIntermediateGroups: true
+  generateEmptyDirectories: true
+
+settings:
+  base:
+    DEVELOPMENT_TEAM: PXD36584ME
+    CODE_SIGN_STYLE: Manual
+    CODE_SIGN_IDENTITY: "Developer ID Application: Koode (PXD36584ME)"
+    ENABLE_HARDENED_RUNTIME: YES
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    SWIFT_VERSION: "6.0"
+
+targets:
+  # The virtual audio driver: a Core Audio AudioServerPlugIn packaged as a
+  # `.driver` bundle installed into /Library/Audio/Plug-Ins/HAL. Pure C, no Swift.
+  OpenFadersDriver:
+    type: bundle
+    platform: macOS
+    sources:
+      - path: Sources/OpenFadersDriver
+        excludes:
+          - "Info.plist"
+    settings:
+      base:
+        PRODUCT_NAME: OpenFadersDriver
+        PRODUCT_BUNDLE_IDENTIFIER: app.openfaders.driver
+        INFOPLIST_FILE: Sources/OpenFadersDriver/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        WRAPPER_EXTENSION: driver
+        MACH_O_TYPE: mh_bundle
+        CLANG_ENABLE_OBJC_ARC: NO
+        GCC_C_LANGUAGE_STANDARD: gnu11
+        SKIP_INSTALL: YES
+    dependencies:
+      - sdk: CoreAudio.framework
+      - sdk: CoreFoundation.framework
