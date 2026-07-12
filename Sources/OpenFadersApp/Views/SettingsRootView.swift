@@ -135,11 +135,7 @@ struct StartupTab: View {
                     Text(driverStatusText)
                         .foregroundStyle(model.driverInstallState == .installed ? Color.green : Color.orange)
                 }
-                if model.driverInstallState != .installed {
-                    Button(model.driverInstallState == .outdated ? "Update driver…" : "Install driver…") {
-                        model.presentOnboarding()
-                    }
-                }
+                Button(driverActionText) { model.presentOnboarding() }
                 Button("Reveal in Finder") { DriverStatus.revealInFinder() }
             }
         }
@@ -151,6 +147,14 @@ struct StartupTab: View {
         case .installed: return "Installed"
         case .outdated: return "Update available"
         case .notInstalled: return "Not installed"
+        }
+    }
+
+    private var driverActionText: String {
+        switch model.driverInstallState {
+        case .installed: return "Reinstall driver…"
+        case .outdated: return "Update driver…"
+        case .notInstalled: return "Install driver…"
         }
     }
 }

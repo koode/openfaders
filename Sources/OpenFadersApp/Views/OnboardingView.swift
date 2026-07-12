@@ -64,13 +64,18 @@ struct OnboardingView: View {
     }
 
     @ViewBuilder private var driverStatusRow: some View {
-        if model.driverInstallState == .installed {
-            Label("Audio driver installed", systemImage: "checkmark.circle.fill")
-                .foregroundStyle(.green)
-        } else if model.isInstallingDriver {
+        if model.isInstallingDriver {
             HStack(spacing: 8) {
                 ProgressView().controlSize(.small)
                 Text("Installing…").foregroundStyle(.secondary)
+            }
+        } else if model.driverInstallState == .installed {
+            HStack {
+                Label("Audio driver installed", systemImage: "checkmark.circle.fill")
+                    .foregroundStyle(.green)
+                Spacer()
+                Button("Reinstall") { Task { await model.installDriver() } }
+                    .controlSize(.small)
             }
         } else {
             Button(model.driverInstallState == .outdated ? "Update audio driver" : "Install audio driver") {
