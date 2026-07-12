@@ -64,9 +64,10 @@ matching source to a fader on the board (and set USB 1 Input to Expanded). See
 
 ## Install
 
-Install the signed `.pkg` (it places the app in `/Applications` and the driver in
-`/Library/Audio/Plug-Ins/HAL`, then restarts the audio server so the devices appear
-right away). Full steps, including building from source, are in
+Put `OpenFaders.app` in `/Applications` and open it — on first launch it walks you
+through installing its audio driver with the standard macOS password prompt, no
+Terminal required. A signed `.pkg` is also available if you prefer a traditional
+installer. Full steps, including building from source, are in
 [docs/INSTALL.md](docs/INSTALL.md).
 
 ## Use
