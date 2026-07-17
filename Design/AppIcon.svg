@@ -41,14 +41,16 @@
           fill="none" stroke="#FFFFFF" stroke-opacity="0.14" stroke-width="1.5"/>
   </g>
 
-  <!-- Waveform: 7 rounded bars, tall center, audio-style rhythm -->
-  <g stroke="#FFFFFF" stroke-width="44" stroke-linecap="round" filter="url(#barShadow)">
-    <line x1="302" y1="400.3" x2="302" y2="603.7"/>
-    <line x1="372" y1="335.5" x2="372" y2="668.5"/>
-    <line x1="442" y1="381.8" x2="442" y2="622.2"/>
-    <line x1="512" y1="317.0" x2="512" y2="687.0"/>
-    <line x1="582" y1="381.8" x2="582" y2="622.2"/>
-    <line x1="652" y1="335.5" x2="652" y2="668.5"/>
-    <line x1="722" y1="400.3" x2="722" y2="603.7"/>
+  <!-- Waveform: 7 slender rounded bars following the SF "waveform" rhythm.
+       Short stub left, a rising run into the tall centre bar, a dip just after
+       centre, tall again, then short on the right. Centre-aligned on y=502. -->
+  <g stroke="#FFFFFF" stroke-width="36" stroke-linecap="round" filter="url(#barShadow)">
+    <line x1="302" y1="423.0" x2="302" y2="581.0"/>
+    <line x1="372" y1="356.4" x2="372" y2="647.6"/>
+    <line x1="442" y1="331.4" x2="442" y2="672.6"/>
+    <line x1="512" y1="294.0" x2="512" y2="710.0"/>
+    <line x1="582" y1="389.7" x2="582" y2="614.3"/>
+    <line x1="652" y1="339.8" x2="652" y2="664.2"/>
+    <line x1="722" y1="406.3" x2="722" y2="597.7"/>
   </g>
 </svg>
