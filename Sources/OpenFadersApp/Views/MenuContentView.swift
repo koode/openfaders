@@ -10,7 +10,7 @@ struct MenuContentView: View {
         Text(model.routingState.headline)
 
         if model.routingState == .driverNotInstalled {
-            Button("Install audio driver…") {
+            Button("Install Audio Driver…") {
                 model.presentOnboarding()
             }
         } else {
@@ -19,7 +19,7 @@ struct MenuContentView: View {
 
         Divider()
 
-        Toggle("Enable routing", isOn: Binding(
+        Toggle("Enable Routing", isOn: Binding(
             get: { model.routingEnabled },
             set: { model.setRoutingEnabled($0) }
         ))
@@ -47,6 +47,6 @@ struct MenuContentView: View {
         if model.status.outputDevicePresent {
             return "Connected: \(model.configuration.outputDeviceName)"
         }
-        return "RODECaster not detected"
+        return "RODECaster Not Detected"
     }
 }

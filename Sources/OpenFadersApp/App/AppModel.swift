@@ -11,11 +11,11 @@ enum RoutingState: Equatable {
 
     var headline: String {
         switch self {
-        case .driverNotInstalled: return "Audio driver not installed"
-        case .paused: return "Routing paused"
+        case .driverNotInstalled: return "Audio Driver Not Installed"
+        case .paused: return "Routing Paused"
         case .waitingForHardware: return "Waiting for the RODECaster"
         case .active(let deviceCount):
-            return "Routing active · \(deviceCount) device\(deviceCount == 1 ? "" : "s")"
+            return "Routing Active · \(deviceCount) Device\(deviceCount == 1 ? "" : "s")"
         }
     }
 
