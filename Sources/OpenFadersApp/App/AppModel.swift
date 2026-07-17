@@ -21,9 +21,9 @@ enum RoutingState: Equatable {
 
     var menuBarSymbolName: String {
         switch self {
-        case .active: return "waveform"
-        case .paused, .waitingForHardware: return "waveform.slash"
-        case .driverNotInstalled: return "exclamationmark.triangle"
+        case .active: return "waveform.badge.checkmark"
+        case .paused, .waitingForHardware: return "waveform.badge.xmark"
+        case .driverNotInstalled: return "waveform.badge.exclamationmark"
         }
     }
 }
