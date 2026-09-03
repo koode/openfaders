@@ -7,6 +7,13 @@ import SwiftUI
 // installing it without ever opening a terminal.
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Settle where the app lives before anything binds to its path. Onboarding
+        // installs the driver out of this bundle and offers the login item, and both
+        // record the current location, so a move afterwards would leave them stale.
+        // This may terminate the app and relaunch the copy in /Applications.
+        ApplicationRelocator.restoreLoginItemAfterMoveIfNeeded()
+        ApplicationRelocator.offerMoveIfNeeded()
+
         AppModel.shared.showOnboardingIfNeeded()
     }
 }
