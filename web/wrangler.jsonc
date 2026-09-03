@@ -1,0 +1,17 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "openfaders-site",
+  // Pinned so a deploy cannot land in the wrong Cloudflare account.
+  "account_id": "415b003a8517dd18a1898b189116ce56",
+  "compatibility_date": "2026-09-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "main": "vinext/server/fetch-handler",
+  "assets": {
+    "directory": "dist/client",
+    "not_found_handling": "none",
+    "binding": "ASSETS"
+  },
+  "observability": {
+    "enabled": true
+  }
+}
