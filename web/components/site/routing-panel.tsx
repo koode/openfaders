@@ -1,12 +1,13 @@
 import { channelMap } from "@/content/release";
 
 /**
- * The hero visual: the five devices as macOS lists them, next to the faders they
- * land on. Drawn from the same channelMap the table uses, so the picture cannot
- * drift from the documented routing.
+ * The hero visual: the five outputs as they appear in the Mac's sound settings,
+ * with the board source each one feeds.
  *
- * Built from markup rather than a screenshot: it stays sharp at any size, follows
- * the theme, and needs no image asset.
+ * Drawn from the same channelMap the rest of the page uses, so the picture cannot
+ * drift from the documented routing. It deliberately shows only what exists: the
+ * outputs OpenFaders adds. It does not draw faders or meters, because the app has
+ * neither — the faders are on the board.
  */
 export function RoutingPanel() {
     return (
@@ -22,27 +23,24 @@ export function RoutingPanel() {
 
             <ul className="divide-secondary divide-y">
                 {channelMap.map((row, index) => {
-                    // One row reads as selected. A neutral fill with an accent bar
-                    // rather than a brand fill: the brand colour is near-solid in dark
-                    // mode, which drops the channel label below readable contrast.
+                    // One row reads as chosen, the way an output picker shows the
+                    // current selection. A neutral fill with an accent bar: the brand
+                    // colour is near-solid in dark mode and drops the label below
+                    // readable contrast.
                     const isSelected = index === 2;
                     return (
                         <li
                             key={row.device}
                             className={
-                                "relative flex items-center justify-between gap-4 py-2.5 pr-4 pl-4 " +
+                                "relative flex items-center justify-between gap-4 px-4 py-3 " +
                                 (isSelected ? "bg-secondary" : "")
                             }
                         >
-                            {isSelected && (
-                                <span className="bg-brand-solid absolute inset-y-0 left-0 w-0.5" />
-                            )}
+                            {isSelected && <span className="bg-brand-solid absolute inset-y-0 left-0 w-0.5" />}
                             <span className="flex items-center gap-2.5">
                                 <SpeakerIcon
                                     className={
-                                        isSelected
-                                            ? "text-fg-brand-primary size-4"
-                                            : "text-fg-quaternary size-4"
+                                        isSelected ? "text-fg-brand-primary size-4" : "text-fg-quaternary size-4"
                                     }
                                 />
                                 <span
@@ -55,39 +53,17 @@ export function RoutingPanel() {
                                     {row.device}
                                 </span>
                             </span>
-                            <span className="text-tertiary shrink-0 text-xs tabular-nums">
-                                ch {row.channels}
-                            </span>
+                            <span className="text-tertiary shrink-0 text-xs">{row.source}</span>
                         </li>
                     );
                 })}
             </ul>
 
-            <div className="border-secondary bg-secondary flex items-end justify-center gap-3 border-t px-4 py-5">
-                {/* Fader heights are arbitrary positions, not measured levels. They
-                    only show that each device arrives on a separate strip. */}
-                {[46, 62, 78, 38, 54].map((height, index) => (
-                    <Fader key={channelMap[index].device} height={height} label={channelMap[index].source} />
-                ))}
+            <div className="border-secondary bg-secondary border-t px-4 py-3">
+                <p className="text-quaternary text-xs">
+                    Five outputs on the Mac, five sources on the board.
+                </p>
             </div>
-        </div>
-    );
-}
-
-function Fader({ height, label }: { height: number; label: string }) {
-    return (
-        <div className="flex flex-col items-center gap-2">
-            <div className="bg-quaternary relative h-24 w-1.5 rounded-full">
-                <span
-                    className="bg-brand-solid absolute bottom-0 w-full rounded-full"
-                    style={{ height: `${height}%` }}
-                />
-                <span
-                    className="border-secondary bg-primary absolute left-1/2 h-3.5 w-5 -translate-x-1/2 rounded-sm border shadow-sm"
-                    style={{ bottom: `calc(${height}% - 7px)` }}
-                />
-            </div>
-            <span className="text-quaternary max-w-12 truncate text-[10px]">{label}</span>
         </div>
     );
 }

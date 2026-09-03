@@ -21,7 +21,7 @@ export function SiteHeader() {
                         href="/#channels"
                         className="text-tertiary hover:text-secondary hidden rounded-lg px-3 py-2 text-sm font-semibold transition duration-100 ease-linear sm:block"
                     >
-                        Channels
+                        Outputs
                     </a>
                     <ThemeToggle />
                 </div>
@@ -36,8 +36,8 @@ const footerLinks = [
         links: [
             { label: "Download", href: release.dmg.url },
             { label: "Installer package", href: release.pkg.url },
-            { label: "Channel map", href: "/#channels" },
-            { label: "Install steps", href: "/#install" },
+            { label: "The five outputs", href: "/#channels" },
+            { label: "How to set it up", href: "/#how" },
         ],
     },
     {
@@ -62,8 +62,8 @@ export function SiteFooter() {
                             <span className="text-primary text-sm font-semibold">OpenFaders</span>
                         </div>
                         <p className="text-tertiary mt-3 max-w-xs text-sm">
-                            Five virtual audio devices for macOS, routed into the RODECaster Pro II
-                            over its Multitrack USB return.
+                            Five separate outputs for your Mac, so every app gets its own fader on
+                            the RODECaster Pro II.
                         </p>
                         <p className="text-quaternary mt-4 text-sm">
                             <a

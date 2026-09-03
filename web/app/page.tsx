@@ -13,10 +13,10 @@ export default function HomePage() {
             <SiteHeader />
             <main className="flex-1">
                 <Hero />
-                <WhatItSolves />
-                <ChannelMap />
-                <Features />
-                <Install />
+                <Benefits />
+                <Outputs />
+                <Steps />
+                <Download />
             </main>
             <SiteFooter />
         </div>
@@ -29,28 +29,27 @@ function Hero() {
             <div className="grid items-center gap-12 lg:grid-cols-[1.05fr_1fr] lg:gap-16">
                 <div>
                     <Badge type="pill-color" color="brand" size="md">
-                        Version {release.version}
+                        For the RODECaster Pro II
                     </Badge>
                     <h1 className="text-primary mt-5 text-display-md font-semibold tracking-tight md:text-display-lg">
                         Every app on its own fader
                     </h1>
                     <p className="text-tertiary mt-5 text-lg">
-                        OpenFaders adds five virtual audio devices to macOS and routes each one into
-                        its own channel pair on the RODECaster Pro II. Send a game to one, music to
-                        another, and mix them on the board.
+                        Your game, your music and your calls reach the board as one lump of sound.
+                        OpenFaders adds five separate outputs to your Mac, so each app arrives on the
+                        board as its own source and you can put it on its own fader.
                     </p>
 
                     <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
                         <Button size="xl" href={release.dmg.url}>
-                            Download for macOS
+                            Download for Mac
                         </Button>
-                        <Button size="xl" color="secondary" href={release.pkg.url}>
-                            Installer package
+                        <Button size="xl" color="secondary" href="#how">
+                            See how it works
                         </Button>
                     </div>
                     <p className="text-quaternary mt-4 text-sm">
-                        {release.dmg.size} · {release.minimumMacOS} or later · Apple Silicon and
-                        Intel · signed and notarized by Apple
+                        Free · {release.dmg.size} · {release.minimumMacOS} or later
                     </p>
                 </div>
 
@@ -60,108 +59,30 @@ function Hero() {
     );
 }
 
-function WhatItSolves() {
-    return (
-        <section className="border-secondary bg-secondary border-y">
-            <div className="mx-auto max-w-5xl px-6 py-16 md:py-20">
-                <h2 className="text-primary text-display-xs font-semibold md:text-display-sm">
-                    macOS sends everything to one output
-                </h2>
-                <div className="text-tertiary mt-5 grid gap-5 text-md md:grid-cols-2 md:gap-10">
-                    <p>
-                        The RODECaster Pro II accepts ten channels of audio over USB, which the board
-                        splits into five named sources. macOS has no way to decide which app goes to
-                        which channel, so everything arrives on one pair and lands on one fader.
-                    </p>
-                    <p>
-                        OpenFaders publishes five output devices instead. Pick one in an app, or in
-                        Sound settings, and its audio arrives on the matching source. Then raise the
-                        fader.
-                    </p>
-                </div>
-            </div>
-        </section>
-    );
-}
-
-function ChannelMap() {
-    return (
-        <section id="channels" className="mx-auto max-w-5xl px-6 py-16 md:py-20">
-            <h2 className="text-primary text-display-xs font-semibold md:text-display-sm">
-                Which device lands where
-            </h2>
-            <p className="text-tertiary mt-3 max-w-2xl text-md">
-                Set the board to Multitrack USB mode, then assign the source to a fader.
-            </p>
-
-            <div className="border-secondary mt-8 overflow-hidden rounded-xl border">
-                <table className="w-full text-left text-sm">
-                    <thead className="bg-secondary text-quaternary">
-                        <tr>
-                            <th className="px-5 py-3 font-medium">macOS output device</th>
-                            <th className="px-5 py-3 font-medium">USB channels</th>
-                            <th className="px-5 py-3 font-medium">Board source</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {channelMap.map((row) => (
-                            <tr key={row.device} className="border-secondary border-t">
-                                <td className="text-primary px-5 py-3 font-medium">{row.device}</td>
-                                <td className="text-tertiary px-5 py-3 tabular-nums">{row.channels}</td>
-                                <td className="text-tertiary px-5 py-3">{row.source}</td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
-
-            <p className="text-quaternary mt-4 text-sm">
-                Only System is monitored by default. To hear the other four, set USB 1 Input to
-                Expanded on the board and assign each source to a fader.
-            </p>
-        </section>
-    );
-}
-
-const features = [
+const benefits = [
     {
-        title: "Five virtual devices",
-        body: "System, Game, Music, Virtual A and Virtual B appear in Sound settings like any other output. Each one is stereo and runs at 48 kHz.",
+        title: "Mix your apps live",
+        body: "Once each app is on its own fader, the board does the rest. Pull the game down for a moment and put it back, without touching the music.",
     },
     {
-        title: "No drift on long sessions",
-        body: "Routing is hardware-timed. Adaptive drift correction locks each virtual clock to the board, so a stream that runs for hours stays in step. No resampling.",
+        title: "Set it once",
+        body: "Pick an OpenFaders output in an app and your Mac remembers. OpenFaders sits in the menu bar, with no Dock icon, and can start when you log in.",
     },
     {
-        title: "Installs its own driver",
-        body: "The app carries the audio driver and installs it after one standard macOS password prompt. There is no Terminal step and no separate installer to find.",
-    },
-    {
-        title: "Menu bar, no Dock icon",
-        body: "Routing state and an on/off switch sit in the menu bar. Settings covers active devices, hardware output, drift correction and opening at login.",
-    },
-    {
-        title: "Written from scratch",
-        body: "A Core Audio AudioServerPlugIn built against Apple's public APIs. It is a clean-room alternative to the vendor's virtual-channels software, not a fork of it.",
-    },
-    {
-        title: "MIT licensed",
-        body: "The driver, the routing engine, the menu bar app and a headless CLI are all open source.",
+        title: "Keeps in step, if you want",
+        body: "A Mac and a mixer count time slightly differently, which can show up over a long session. Turn on Adaptive drift correction in Settings and OpenFaders follows the board's clock instead.",
     },
 ];
 
-function Features() {
+function Benefits() {
     return (
         <section className="border-secondary bg-secondary border-y">
             <div className="mx-auto max-w-5xl px-6 py-16 md:py-20">
-                <h2 className="text-primary text-display-xs font-semibold md:text-display-sm">
-                    What it does
-                </h2>
-                <div className="mt-10 grid gap-x-8 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
-                    {features.map((feature) => (
-                        <div key={feature.title}>
-                            <h3 className="text-primary text-md font-semibold">{feature.title}</h3>
-                            <p className="text-tertiary mt-2 text-sm">{feature.body}</p>
+                <div className="grid gap-10 md:grid-cols-3">
+                    {benefits.map((benefit) => (
+                        <div key={benefit.title}>
+                            <h2 className="text-primary text-md font-semibold">{benefit.title}</h2>
+                            <p className="text-tertiary mt-2 text-sm">{benefit.body}</p>
                         </div>
                     ))}
                 </div>
@@ -170,65 +91,119 @@ function Features() {
     );
 }
 
+function Outputs() {
+    return (
+        <section id="channels" className="mx-auto max-w-5xl px-6 py-16 md:py-20">
+            <h2 className="text-primary text-display-xs font-semibold md:text-display-sm">
+                Five outputs, five sources
+            </h2>
+            <p className="text-tertiary mt-3 max-w-2xl text-md">
+                These appear in your Mac's sound settings, and in any app that lets you choose an
+                output. Each one turns up on the board under a name you already know.
+            </p>
+
+            <div className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                {channelMap.map((row) => (
+                    <div key={row.device} className="border-secondary bg-primary rounded-xl border p-4">
+                        <p className="text-primary text-sm font-semibold">
+                            {row.device.replace("OpenFaders ", "")}
+                        </p>
+                        <p className="text-quaternary mt-1 text-xs">on the board: {row.source}</p>
+                    </div>
+                ))}
+            </div>
+
+            <p className="text-quaternary mt-6 max-w-2xl text-sm">
+                Two things to do on the board the first time: set USB 1 Input to Expanded, and put
+                each source on a spare fader. Out of the box only System is set up to be heard.
+            </p>
+        </section>
+    );
+}
+
 const steps = [
     {
-        title: "Install the app",
-        body: "Open the disk image and drag OpenFaders to your Applications folder.",
+        title: "Install it",
+        body: "Open the download and drag OpenFaders to your Applications folder.",
     },
     {
-        title: "Let it install the driver",
-        body: "On first launch it asks once, with the standard macOS password prompt. Installing the driver restarts the system audio server, which interrupts all audio on the Mac for about a second.",
+        title: "Say yes once",
+        body: "The first time you open it, OpenFaders asks for your password so it can add the outputs. Your Mac's sound stops for about a second while it does.",
     },
     {
-        title: "Send an app to a device",
-        body: "Pick an OpenFaders device as the output, then bring the matching source up on a fader on the board.",
+        title: "Choose an output",
+        body: "In any app, pick an OpenFaders output instead of your usual one. Bring the matching source up on the board and you are mixing.",
     },
 ];
 
-function Install() {
+function Steps() {
     return (
-        <section id="install" className="mx-auto max-w-5xl px-6 py-16 md:py-20">
-            <h2 className="text-primary text-display-xs font-semibold md:text-display-sm">
-                Three steps
-            </h2>
+        <section id="how" className="border-secondary bg-secondary border-y">
+            <div className="mx-auto max-w-5xl px-6 py-16 md:py-20">
+                <h2 className="text-primary text-display-xs font-semibold md:text-display-sm">
+                    Three steps to set up
+                </h2>
 
-            <ol className="mt-10 grid gap-8 md:grid-cols-3">
-                {steps.map((step, index) => (
-                    <li key={step.title}>
-                        <span className="bg-brand-solid text-white flex size-8 items-center justify-center rounded-full text-sm font-semibold tabular-nums">
-                            {index + 1}
-                        </span>
-                        <h3 className="text-primary mt-4 text-md font-semibold">{step.title}</h3>
-                        <p className="text-tertiary mt-2 text-sm">{step.body}</p>
-                    </li>
-                ))}
-            </ol>
-
-            <div className="border-secondary mt-12 rounded-xl border p-6 md:p-8">
-                <h3 className="text-primary text-md font-semibold">Before you start</h3>
-                <ul className="text-tertiary mt-3 list-disc space-y-2 pl-5 text-sm">
-                    <li>{release.minimumMacOS} or later, on Apple Silicon or Intel.</li>
-                    <li>
-                        A RODECaster Pro II set to Multitrack USB mode on the device itself. No
-                        software can change that setting, and OpenFaders does not try to.
-                    </li>
-                    <li>
-                        The first time it routes audio, macOS asks for microphone access. OpenFaders
-                        captures what apps play into its own virtual devices so it can forward that
-                        to the board. It records no microphone.
-                    </li>
-                </ul>
-
-                <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-                    <Button size="lg" href={release.dmg.url}>
-                        Download {release.version}
-                    </Button>
-                    <Button size="lg" color="secondary" href={release.pkg.url}>
-                        Download the .pkg installer
-                    </Button>
-                </div>
+                <ol className="mt-10 grid gap-8 md:grid-cols-3">
+                    {steps.map((step, index) => (
+                        <li key={step.title}>
+                            <span className="bg-brand-solid text-white flex size-8 items-center justify-center rounded-full text-sm font-semibold tabular-nums">
+                                {index + 1}
+                            </span>
+                            <h3 className="text-primary mt-4 text-md font-semibold">{step.title}</h3>
+                            <p className="text-tertiary mt-2 text-sm">{step.body}</p>
+                        </li>
+                    ))}
+                </ol>
             </div>
         </section>
     );
 }
 
+function Download() {
+    return (
+        <section id="install" className="mx-auto max-w-5xl px-6 py-16 md:py-24">
+            <div className="border-secondary rounded-2xl border p-8 md:p-12">
+                <h2 className="text-primary text-display-xs font-semibold md:text-display-sm">
+                    Get OpenFaders
+                </h2>
+                <p className="text-tertiary mt-3 max-w-xl text-md">
+                    Free and open source. No account and no sign-up.
+                </p>
+
+                <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
+                    <Button size="xl" href={release.dmg.url}>
+                        Download for Mac
+                    </Button>
+                    <Button size="xl" color="secondary" href={release.pkg.url}>
+                        Installer version
+                    </Button>
+                </div>
+
+                <dl className="text-quaternary mt-10 grid gap-6 text-sm sm:grid-cols-3">
+                    <div>
+                        <dt className="text-secondary font-semibold">You need</dt>
+                        <dd className="mt-1">
+                            A RODECaster Pro II, switched to Multitrack USB mode on the board itself.
+                            No software can change that for you.
+                        </dd>
+                    </div>
+                    <div>
+                        <dt className="text-secondary font-semibold">Works on</dt>
+                        <dd className="mt-1">
+                            {release.minimumMacOS} or later, Apple Silicon or Intel. Version{" "}
+                            {release.version}.
+                        </dd>
+                    </div>
+                    <div>
+                        <dt className="text-secondary font-semibold">Microphone prompt</dt>
+                        <dd className="mt-1">
+                            Say yes. OpenFaders needs it to pass your apps' sound through to the
+                            board. It does not record you.
+                        </dd>
+                    </div>
+                </dl>
+            </div>
+        </section>
+    );
+}
