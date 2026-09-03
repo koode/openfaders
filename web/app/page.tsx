@@ -1,7 +1,7 @@
 import { Button } from "@/components/base/buttons/button";
 import { Badge } from "@/components/base/badges/badges";
 import { RoutingPanel } from "@/components/site/routing-panel";
-import { ThemeToggle } from "@/components/site/theme-toggle";
+import { SiteFooter, SiteHeader } from "@/components/site/chrome";
 import { channelMap, release } from "@/content/release";
 
 // Prerendered at build time. Nothing on this page is per-request.
@@ -20,34 +20,6 @@ export default function HomePage() {
             </main>
             <SiteFooter />
         </div>
-    );
-}
-
-function SiteHeader() {
-    return (
-        <header className="border-secondary border-b">
-            <nav className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
-                <a href="/" className="flex items-center gap-2.5">
-                    <img src="/appicon.png" alt="" className="size-8 rounded-lg" />
-                    <span className="text-primary text-md font-semibold">OpenFaders</span>
-                </a>
-                <div className="flex items-center gap-1">
-                    <a
-                        href="#install"
-                        className="text-tertiary hover:text-secondary hidden rounded-lg px-3 py-2 text-sm font-semibold transition duration-100 ease-linear sm:block"
-                    >
-                        Install
-                    </a>
-                    <a
-                        href="#channels"
-                        className="text-tertiary hover:text-secondary hidden rounded-lg px-3 py-2 text-sm font-semibold transition duration-100 ease-linear sm:block"
-                    >
-                        Channels
-                    </a>
-                    <ThemeToggle />
-                </div>
-            </nav>
-        </header>
     );
 }
 
@@ -260,18 +232,3 @@ function Install() {
     );
 }
 
-function SiteFooter() {
-    return (
-        <footer className="border-secondary border-t">
-            <div className="mx-auto flex max-w-5xl flex-col gap-4 px-6 py-10 md:flex-row md:items-center md:justify-between">
-                <p className="text-quaternary text-sm">
-                    OpenFaders is MIT licensed. Version {release.version}.
-                </p>
-                <p className="text-quaternary max-w-md text-sm">
-                    Not affiliated with or endorsed by RØDE. RØDE and RODECaster are trademarks of
-                    their respective owner.
-                </p>
-            </div>
-        </footer>
-    );
-}
