@@ -76,3 +76,17 @@ the `.pkg`, and optionally notarizes and staples it.
 
 `Scripts/build-dmg.sh` then wraps the signed app into a drag-to-Applications
 `.dmg`. Both files land in `build/dist/` and both go on the GitHub release.
+
+`Scripts/publish-r2.sh` uploads those two files to the public R2 bucket behind
+`downloads.openfaders.org` and refreshes `latest.json`, which is what the website
+links to. It refuses to publish a build without a notarization ticket. The
+repository is private, so GitHub's own download URLs need a token; R2 is the public
+mirror.
+
+A full release is three commands:
+
+```sh
+env OPENFADERS_NOTARY_PROFILE=openfaders-notary Scripts/build-release.sh
+env OPENFADERS_NOTARY_PROFILE=openfaders-notary Scripts/build-dmg.sh
+Scripts/publish-r2.sh
+```
