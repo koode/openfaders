@@ -64,11 +64,12 @@ matching source to a fader on the board (and set USB 1 Input to Expanded). See
 
 ## Install
 
-Put `OpenFaders.app` in `/Applications` and open it — on first launch it walks you
-through installing its audio driver with the standard macOS password prompt, no
-Terminal required. A signed `.pkg` is also available if you prefer a traditional
-installer. Full steps, including building from source, are in
-[docs/INSTALL.md](docs/INSTALL.md).
+Download the latest [release](https://github.com/koode/openfaders/releases/latest),
+open the `.dmg` and drag `OpenFaders.app` to `/Applications`. Open it — on first
+launch it walks you through installing its audio driver with the standard macOS
+password prompt, no Terminal required. A signed `.pkg` is in the same release if
+you prefer a traditional installer that places the driver for you. Full steps,
+including building from source, are in [docs/INSTALL.md](docs/INSTALL.md).
 
 ## Use
 

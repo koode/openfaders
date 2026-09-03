@@ -73,3 +73,6 @@ the board and runs until Ctrl-C.
 See [INSTALL.md](INSTALL.md#building-the-installer-yourself) for
 `Scripts/build-release.sh`, which signs both components with a Developer ID, builds
 the `.pkg`, and optionally notarizes and staples it.
+
+`Scripts/build-dmg.sh` then wraps the signed app into a drag-to-Applications
+`.dmg`. Both files land in `build/dist/` and both go on the GitHub release.

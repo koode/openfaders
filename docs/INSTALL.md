@@ -4,8 +4,11 @@
 
 The app installs the audio driver for you — no Terminal, no separate installer.
 
-1. Put `OpenFaders.app` in `/Applications` and open it. It lives in the menu bar
-   (no Dock icon).
+1. Download `OpenFaders-<version>.dmg` from the
+   [latest release](https://github.com/koode/openfaders/releases/latest), open it,
+   and drag `OpenFaders.app` onto the `Applications` folder in the same window.
+   Eject the disk image, then open the app from `/Applications`. It lives in the
+   menu bar (no Dock icon).
 2. On first launch it shows a short setup window. Click **Install audio driver**
    and authenticate with the standard macOS password prompt. OpenFaders copies its
    bundled driver into place and restarts the audio server for you. **This briefly
@@ -22,10 +25,9 @@ OpenFaders device, and bring the matching source up on a fader
 
 ## From the installer
 
-Prefer a traditional installer? The signed `.pkg` places the same components and
-restarts the audio server:
-
-
+Prefer a traditional installer? The signed `.pkg` in the same
+[release](https://github.com/koode/openfaders/releases/latest) places the same
+components and restarts the audio server:
 
 1. Open `OpenFaders-<version>.pkg` and follow the prompts. It installs:
    - `OpenFaders.app` into `/Applications`
@@ -74,6 +76,15 @@ xcrun notarytool store-credentials openfaders-notary \
 ```
 
 then set `OPENFADERS_NOTARY_PROFILE=openfaders-notary` before running the script.
+
+`Scripts/build-dmg.sh` wraps the signed app from that run into a
+drag-to-Applications `.dmg`, also in `build/dist/`. Run it after
+`Scripts/build-release.sh`, because it signs nothing itself and refuses to package
+an unsigned app:
+
+```sh
+Scripts/build-dmg.sh
+```
 
 For local development without building a full installer, see
 [BUILDING.md](BUILDING.md).
