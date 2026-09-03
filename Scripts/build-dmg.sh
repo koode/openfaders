@@ -15,6 +15,12 @@
 # Signing identity (override via environment):
 #   OPENFADERS_SIGN_IDENTITY   Developer ID Application: Koode (PXD36584ME)
 #
+# Notarization (optional): set OPENFADERS_NOTARY_PROFILE to the name of a
+# `notarytool store-credentials` keychain profile. It then notarizes and staples
+# the app before the image is built, and the image itself afterwards. Both tickets
+# matter: the one on the image clears the download, and the one on the app travels
+# with the bundle the user drags to /Applications.
+#
 # Prerequisites: a signed build/Release/OpenFaders.app. Does not require sudo.
 
 set -euo pipefail
@@ -23,6 +29,7 @@ readonly project_root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$project_root"
 
 readonly app_identity="${OPENFADERS_SIGN_IDENTITY:-Developer ID Application: Koode (PXD36584ME)}"
+readonly notary_profile="${OPENFADERS_NOTARY_PROFILE:-}"
 
 readonly app_bundle="$project_root/build/Release/OpenFaders.app"
 readonly dist_dir="$project_root/build/dist"
@@ -45,6 +52,21 @@ fi
 readonly version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' \
     "$app_bundle/Contents/Info.plist")"
 readonly dmg="$dist_dir/OpenFaders-$version.dmg"
+
+if [[ -n "$notary_profile" ]]; then
+    echo "==> Notarizing the app with profile '$notary_profile' (this can take a few minutes)"
+    # notarytool takes an archive, not a bundle. Staple the ticket to the app
+    # before the image is built, so the copy the user drags out carries it and
+    # opens on a Mac that is offline.
+    readonly app_archive="$project_root/build/OpenFaders-app.zip"
+    rm -f "$app_archive"
+    ditto -c -k --keepParent "$app_bundle" "$app_archive"
+    xcrun notarytool submit "$app_archive" --keychain-profile "$notary_profile" --wait
+    rm -f "$app_archive"
+    echo "==> Stapling the app"
+    xcrun stapler staple "$app_bundle"
+    xcrun stapler validate "$app_bundle"
+fi
 
 echo "==> Staging the disk image contents"
 rm -rf "$staging_dir"
@@ -69,6 +91,16 @@ hdiutil create \
 echo "==> Signing with '$app_identity'"
 codesign --force --timestamp --sign "$app_identity" "$dmg"
 codesign --verify --strict --verbose=2 "$dmg"
+
+if [[ -n "$notary_profile" ]]; then
+    echo "==> Notarizing the disk image (this can take a few minutes)"
+    xcrun notarytool submit "$dmg" --keychain-profile "$notary_profile" --wait
+    echo "==> Stapling the disk image"
+    xcrun stapler staple "$dmg"
+    xcrun stapler validate "$dmg"
+else
+    echo "==> Skipping notarization (set OPENFADERS_NOTARY_PROFILE to enable)"
+fi
 
 rm -rf "$staging_dir"
 
