@@ -28,6 +28,13 @@ struct MenuContentView: View {
 
         Divider()
 
+        // Only appears once a check has actually found something newer.
+        if let update = UpdateChecker.shared.availableUpdate {
+            Button("Download OpenFaders \(update.version)…") {
+                UpdateChecker.shared.openDownloadPage()
+            }
+        }
+
         Button("Set Up OpenFaders…") {
             model.presentOnboarding()
         }

@@ -15,6 +15,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ApplicationRelocator.offerMoveIfNeeded()
 
         AppModel.shared.showOnboardingIfNeeded()
+
+        // Asks downloads.openfaders.org whether a newer release exists, at most
+        // once a day, and only when the user has left the check switched on.
+        UpdateChecker.shared.checkInBackgroundIfDue()
     }
 }
 

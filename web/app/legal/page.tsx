@@ -20,7 +20,7 @@ export default function LegalPage() {
             <main className="mx-auto w-full max-w-3xl flex-1 px-6 py-16 md:py-20">
                 <h1 className="text-primary text-display-sm font-semibold tracking-tight">Legal</h1>
                 <p className="text-tertiary mt-4 text-md">
-                    OpenFaders is free software, published by Jeroen Visser (Koode). This page holds
+                    OpenFaders is free software, published by Koode. This page holds
                     the licence it ships under, the trademark notice, the disclaimer, and what the
                     software and this site do with your data.
                 </p>
@@ -35,12 +35,27 @@ export default function LegalPage() {
                         OpenFaders neither receives nor keeps those logs.
                     </p>
                     <p>
-                        <strong className="text-secondary font-semibold">The app</strong> makes no
-                        network connections. It has no analytics, no telemetry, no update check and
-                        no account. Its only capability beyond audio is the macOS audio-input
-                        permission, which it needs to read back what apps play into its own virtual
-                        devices so it can forward that to your hardware. It does not record your
-                        microphone, and no audio leaves your Mac.
+                        <strong className="text-secondary font-semibold">The app</strong> makes one
+                        kind of network request, and only that one: an update check. At most once a
+                        day it fetches{" "}
+                        <code className="text-secondary">
+                            downloads.openfaders.org/latest.json
+                        </code>
+                        , a static file, to see whether a newer version exists. The request carries
+                        no identifier, no query string and no body, and nothing about your Mac or
+                        your setup is sent. Cloudflare sees the connection as it would any other
+                        download. OpenFaders never installs an update on its own; it tells you and
+                        stops there.
+                    </p>
+                    <p>
+                        Turn it off in Settings ▸ Startup and the app makes no network connections at
+                        all. There is no analytics, no telemetry, no crash reporting and no account.
+                    </p>
+                    <p>
+                        Its only capability beyond audio is the macOS audio-input permission, which
+                        it needs to read back what apps play into its own virtual devices so it can
+                        forward that to your hardware. It does not record your microphone, and no
+                        audio leaves your Mac.
                     </p>
                     <p>
                         There is no data to request, correct or delete, because none is collected.
@@ -76,12 +91,12 @@ export default function LegalPage() {
 
                 <Section id="contact" title="Contact">
                     <p>
-                        Jeroen Visser (Koode) —{" "}
+                        Koode —{" "}
                         <a
-                            href="mailto:jeroen@koode.nl"
+                            href="mailto:hello@openfaders.org"
                             className="text-brand-secondary font-semibold underline underline-offset-2"
                         >
-                            jeroen@koode.nl
+                            hello@openfaders.org
                         </a>
                     </p>
                 </Section>

@@ -114,6 +114,8 @@ struct RoutingTab: View {
 struct StartupTab: View {
     @Environment(AppModel.self) private var model
     @State private var launchAtLogin = LoginItem.isEnabled
+    @State private var checksForUpdates = UpdateChecker.isEnabled
+    @State private var isCheckingNow = false
 
     var body: some View {
         Form {
@@ -127,6 +129,44 @@ struct StartupTab: View {
                 ))
                 if LoginItem.requiresApproval {
                     Button("Approve in Login Items…") { LoginItem.openLoginItemsSettings() }
+                }
+            }
+
+            Section("Updates") {
+                Toggle("Check for updates automatically", isOn: Binding(
+                    get: { checksForUpdates },
+                    set: { newValue in
+                        UpdateChecker.isEnabled = newValue
+                        checksForUpdates = newValue
+                    }
+                ))
+                Text("Asks downloads.openfaders.org once a day whether a newer release "
+                     + "exists. Nothing about this Mac is sent, and OpenFaders never "
+                     + "installs an update on its own.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                LabeledContent("Status") {
+                    if let update = UpdateChecker.shared.availableUpdate {
+                        Text("Version \(update.version) available")
+                            .foregroundStyle(Color.orange)
+                    } else {
+                        Text("Version \(UpdateChecker.shared.installedVersion)")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                if UpdateChecker.shared.availableUpdate != nil {
+                    Button("Download update…") { UpdateChecker.shared.openDownloadPage() }
+                } else {
+                    Button(isCheckingNow ? "Checking…" : "Check Now") {
+                        isCheckingNow = true
+                        Task {
+                            await UpdateChecker.shared.check(force: true)
+                            isCheckingNow = false
+                        }
+                    }
+                    .disabled(isCheckingNow)
                 }
             }
 

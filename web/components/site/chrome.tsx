@@ -67,10 +67,10 @@ export function SiteFooter() {
                         </p>
                         <p className="text-quaternary mt-4 text-sm">
                             <a
-                                href="mailto:jeroen@koode.nl"
+                                href="mailto:hello@openfaders.org"
                                 className="hover:text-tertiary underline underline-offset-2"
                             >
-                                jeroen@koode.nl
+                                hello@openfaders.org
                             </a>
                         </p>
                     </div>
@@ -96,7 +96,7 @@ export function SiteFooter() {
 
                 <div className="border-secondary mt-10 space-y-3 border-t pt-8">
                     <p className="text-quaternary text-xs">
-                        © 2026 Jeroen Visser (Koode). OpenFaders is free software under the{" "}
+                        © 2026 Koode. OpenFaders is free software under the{" "}
                         <a href="/legal#license" className="hover:text-tertiary underline underline-offset-2">
                             MIT Licence
                         </a>
