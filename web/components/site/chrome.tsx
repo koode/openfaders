@@ -100,7 +100,7 @@ export function SiteFooter() {
                         <a href="/legal#license" className="hover:text-tertiary underline underline-offset-2">
                             MIT Licence
                         </a>
-                        , provided without warranty of any kind. Version {release.version}.
+                        , provided without warranty of any kind.
                     </p>
                     <p className="text-quaternary text-xs">
                         Not affiliated with, endorsed by, or sponsored by RØDE Microphones /
