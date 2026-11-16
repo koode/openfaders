@@ -105,6 +105,11 @@ Audio, or `openfaders-route --adaptive`) runs a control loop that slaves each
 virtual device's clock to the board so long sessions stay glitch-free, with no
 resampling. It needs the current OpenFaders driver installed.
 
+## Branding
+
+The logo, an avatar for profile pictures and the app icon, as SVG and PNG, are in
+[docs/branding](docs/branding/README.md).
+
 ## License
 
 MIT, see [LICENSE](LICENSE). Please read [NOTICE.md](NOTICE.md) for the
